@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>3D Archery Game</title>
+<style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+</style>
+</head>
+<body>
+
+<!-- Three.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+
+<script>
+// ===============================
+// 基本設定
+// ===============================
+
+// シーン作成
+const scene = new THREE.Scene();
+
+// 空を青空色に設定
+scene.background = new THREE.Color(0x87CEEB);
+
+// カメラ（視点）
+const camera = new THREE.PerspectiveCamera(
+    75, // 視野角
+    window.innerWidth / window.innerHeight,
+    0.1,
+    1000
+);
+camera.position.set(0, 1.5, 5); // 少し人間目線の高さ
+
+// レンダラー
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// ===============================
+// 地面作成
+// ===============================
+const groundGeometry = new THREE.PlaneGeometry(200, 200);
+const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+ground.rotation.x = -Math.PI / 2;
+scene.add(ground);
+
+// ===============================
+// 光源
+// ===============================
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(10, 20, 10);
+scene.add(light);
+
+const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+scene.add(ambient);
+
+// ===============================
+// 的（アーチェリーターゲット）
+// ===============================
+function createTarget() {
+
+    const targetGroup = new THREE.Group();
+
+    const colors = [
+        0xffffff,
+        0x000000,
+        0x0000ff,
+        0xff0000,
+        0xffff00
+    ];
+
+    for (let i = 0; i < 5; i++) {
+
+        const geometry = new THREE.CircleGeometry(2 - i * 0.4, 64);
+        const material = new THREE.MeshBasicMaterial({ color: colors[i] });
+        const circle = new THREE.Mesh(geometry, material);
+
+        circle.position.z = 0.01 * i; // 少し前にずらす
+        targetGroup.add(circle);
+    }
+
+    targetGroup.position.set(0, 2, -30);
+    scene.add(targetGroup);
+}
+
+createTarget();
+
+// ===============================
+// マウス視点操作（簡易FPS）
+// ===============================
+let isMouseDown = false;
+let previousMousePosition = { x: 0, y: 0 };
+
+document.addEventListener('mousedown', () => {
+    isMouseDown = true;
+});
+
+document.addEventListener('mouseup', () => {
+    isMouseDown = false;
+});
+
+document.addEventListener('mousemove', (event) => {
+
+    if (!isMouseDown) return;
+
+    const deltaMove = {
+        x: event.offsetX - previousMousePosition.x,
+        y: event.offsetY - previousMousePosition.y
+    };
+
+    camera.rotation.y -= deltaMove.x * 0.002;
+    camera.rotation.x -= deltaMove.y * 0.002;
+
+    previousMousePosition = {
+        x: event.offsetX,
+        y: event.offsetY
+    };
+});
+
+// ===============================
+// 矢の作成
+// ===============================
+const arrows = [];
+
+function shootArrow() {
+
+    // 矢のグループ
+    const arrowGroup = new THREE.Group();
+
+    // 矢の棒（少し太めにする）
+    const shaftGeometry = new THREE.CylinderGeometry(0.05, 0.05, 2, 12);
+    const shaftMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+    const shaft = new THREE.Mesh(shaftGeometry, shaftMaterial);
+    shaft.rotation.z = Math.PI / 2;
+
+    arrowGroup.add(shaft);
+
+    // 矢の位置をカメラ位置に設定
+    arrowGroup.position.copy(camera.position);
+
+    // カメラの向きを取得（画面中央方向）
+    const direction = new THREE.Vector3();
+    camera.getWorldDirection(direction);
+
+    arrowGroup.userData = {
+        velocity: direction.clone().multiplyScalar(1)
+    };
+
+    scene.add(arrowGroup);
+    arrows.push(arrowGroup);
+}
+
+// クリックで発射
+document.addEventListener('click', shootArrow);
+
+// ===============================
+// アニメーションループ
+// ===============================
+function animate() {
+    requestAnimationFrame(animate);
+
+    arrows.forEach(arrow => {
+
+        // 矢を前進させる
+        arrow.position.add(arrow.userData.velocity);
+
+        // 軌道を見やすくするために
+        // 少し回転させる
+        arrow.rotation.y += 0.1;
+    });
+
+    renderer.render(scene, camera);
+}
+
+animate();
+
+// ===============================
+// ウィンドウリサイズ対応
+// ===============================
+window.addEventListener('resize', () => {
+
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+});
+</script>
+
+</body>
+</html>
