@@ -1,193 +1,631 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<title>3D Archery Game</title>
-<style>
-    body { margin: 0; overflow: hidden; }
-    canvas { display: block; }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>3D Archery (Browser) - Three.js</title>
+  <style>
+    /* 画面いっぱいに表示するための基本設定 */
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #87ceeb; }
+    #hud {
+      position: fixed;
+      left: 12px; top: 12px;
+      padding: 10px 12px;
+      background: rgba(0,0,0,.45);
+      color: #fff;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 13px;
+      border-radius: 8px;
+      user-select: none;
+      line-height: 1.5;
+    }
+    #crosshair {
+      position: fixed;
+      left: 50%; top: 50%;
+      width: 14px; height: 14px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      opacity: .9;
+    }
+    /* 十字の照準（中央固定） */
+    #crosshair::before, #crosshair::after {
+      content: "";
+      position: absolute;
+      left: 50%; top: 50%;
+      background: rgba(255,255,255,.9);
+      transform: translate(-50%, -50%);
+      border-radius: 1px;
+    }
+    #crosshair::before { width: 14px; height: 2px; }
+    #crosshair::after  { width: 2px;  height: 14px; }
+
+    #overlay {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(0,0,0,.55);
+      color: #fff;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    #overlay.hidden { display: none; }
+    .card {
+      max-width: 560px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 16px;
+      padding: 18px 18px;
+      backdrop-filter: blur(6px);
+    }
+    .card h1 { font-size: 18px; margin: 0 0 10px; }
+    .card p { margin: 6px 0; opacity: .95; }
+    .kbd { display: inline-block; padding: 2px 8px; border-radius: 8px; background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.25); }
+  </style>
 </head>
 <body>
+  <div id="hud"></div>
+  <div id="crosshair"></div>
 
-<!-- Three.js CDN -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+  <!-- PointerLock開始用のオーバーレイ（クリックで開始） -->
+  <div id="overlay">
+    <div class="card">
+      <h1>3Dアーチェリー（ブラウザ）</h1>
+      <p>画面クリックで開始（マウス固定）</p>
+      <p><span class="kbd">左クリック</span>：発射　/　<span class="kbd">R</span>：リセット　/　<span class="kbd">ESC</span>：解除</p>
+      <p style="opacity:.85">※ 矢は常に画面中央から奥へ飛びます。照準はマウスで視点移動して合わせます。</p>
+    </div>
+  </div>
 
-<script>
-// ===============================
-// 基本設定
-// ===============================
+  <!-- Three.js 本体 -->
+  <script type="module">
+    // ============================================================
+    //  3Dアーチェリー（要件対応）
+    //  - 矢は常に画面中央（カメラ中心）から奥へ発射
+    //  - マウスで視点移動（PointerLockControls）
+    //  - 矢は太めにして見やすく
+    //  - 予測軌道を太めのチューブで表示
+    //  - 空は青空
+    //  - 的はアーチェリーの的（同心円）
+    // ============================================================
 
-// シーン作成
-const scene = new THREE.Scene();
+    // Three.js をCDNから読み込み（examplesも含む）
+    import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+    import { PointerLockControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/PointerLockControls.js";
 
-// 空を青空色に設定
-scene.background = new THREE.Color(0x87CEEB);
+    // ----------------------------
+    // 基本：シーン/カメラ/レンダラ
+    // ----------------------------
+    const scene = new THREE.Scene();
 
-// カメラ（視点）
-const camera = new THREE.PerspectiveCamera(
-    75, // 視野角
-    window.innerWidth / window.innerHeight,
-    0.1,
-    1000
-);
-camera.position.set(0, 1.5, 5); // 少し人間目線の高さ
+    // 青空（要件）：
+    // 背景色を空色にするだけでもOKだが、シーン側でも明示しておく
+    scene.background = new THREE.Color(0x87ceeb);
 
-// レンダラー
-const renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
+    // カメラ：FPSっぽく照準を合わせるためにPerspectiveCamera
+    const camera = new THREE.PerspectiveCamera(
+      70,                                   // 視野角（大きいほど広い）
+      window.innerWidth / window.innerHeight,
+      0.01,                                 // 近クリップ
+      500                                   // 遠クリップ
+    );
+    camera.position.set(0, 1.6, 8);          // 人の目線くらいの高さ
 
-// ===============================
-// 地面作成
-// ===============================
-const groundGeometry = new THREE.PlaneGeometry(200, 200);
-const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
-const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-ground.rotation.x = -Math.PI / 2;
-scene.add(ground);
+    // レンダラ：WebGL
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    document.body.appendChild(renderer.domElement);
 
-// ===============================
-// 光源
-// ===============================
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(10, 20, 10);
-scene.add(light);
+    // ----------------------------
+    // 操作：PointerLockControls
+    //  - マウス移動で視点回転
+    // ----------------------------
+    const controls = new PointerLockControls(camera, document.body);
 
-const ambient = new THREE.AmbientLight(0xffffff, 0.4);
-scene.add(ambient);
+    // 画面クリックでロック（開始）
+    const overlay = document.getElementById("overlay");
+    overlay.addEventListener("click", () => controls.lock());
 
-// ===============================
-// 的（アーチェリーターゲット）
-// ===============================
-function createTarget() {
+    // ロック状態でオーバーレイ表示切替
+    controls.addEventListener("lock", () => overlay.classList.add("hidden"));
+    controls.addEventListener("unlock", () => overlay.classList.remove("hidden"));
 
-    const targetGroup = new THREE.Group();
+    // ----------------------------
+    // ライト：視認性UP
+    // ----------------------------
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x335566, 0.9);
+    scene.add(hemi);
 
-    const colors = [
-        0xffffff,
-        0x000000,
-        0x0000ff,
-        0xff0000,
-        0xffff00
-    ];
+    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+    dir.position.set(5, 10, 3);
+    scene.add(dir);
 
-    for (let i = 0; i < 5; i++) {
+    // ----------------------------
+    // 地面（簡易）
+    // ----------------------------
+    const groundGeo = new THREE.PlaneGeometry(400, 400);
+    const groundMat = new THREE.MeshStandardMaterial({
+      color: 0x4c9a4c,     // 草っぽい緑
+      roughness: 1.0,
+      metalness: 0.0
+    });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0;
+    ground.receiveShadow = false;
+    scene.add(ground);
 
-        const geometry = new THREE.CircleGeometry(2 - i * 0.4, 64);
-        const material = new THREE.MeshBasicMaterial({ color: colors[i] });
-        const circle = new THREE.Mesh(geometry, material);
+    // ----------------------------
+    // 的（アーチェリーの的）
+    //  - CanvasTextureで同心円（白/黒/青/赤/黄など）
+    // ----------------------------
+    function createTargetTexture(size = 512) {
+      const c = document.createElement("canvas");
+      c.width = c.height = size;
+      const ctx = c.getContext("2d");
 
-        circle.position.z = 0.01 * i; // 少し前にずらす
-        targetGroup.add(circle);
+      // 背景を白
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, size, size);
+
+      // 中心
+      const cx = size / 2;
+      const cy = size / 2;
+
+      // アーチェリーっぽい配色（外→内）
+      // ざっくり：白, 黒, 青, 赤, 黄
+      const rings = [
+        { r: 250, color: "#ffffff" },
+        { r: 200, color: "#111111" },
+        { r: 150, color: "#1e5bd7" },
+        { r: 100, color: "#d72626" },
+        { r:  55, color: "#f0d000" },
+        { r:  25, color: "#f0d000" }
+      ];
+
+      // 外側から順に塗る（大きい円→小さい円）
+      for (const ring of rings) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, ring.r, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.fillStyle = ring.color;
+        ctx.fill();
+      }
+
+      // 輪郭線（見やすさ）
+      ctx.strokeStyle = "rgba(0,0,0,0.25)";
+      ctx.lineWidth = 6;
+      for (const ring of rings) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, ring.r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // 中心点
+      ctx.fillStyle = "rgba(0,0,0,0.4)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return tex;
     }
 
-    targetGroup.position.set(0, 2, -30);
+    // 的本体
+    const targetGroup = new THREE.Group();
+
+    // 的の面
+    const targetRadius = 0.7;
+    const targetGeo = new THREE.CircleGeometry(targetRadius, 64);
+    const targetMat = new THREE.MeshStandardMaterial({
+      map: createTargetTexture(),
+      roughness: 0.9,
+      metalness: 0.0
+    });
+    const targetFace = new THREE.Mesh(targetGeo, targetMat);
+    targetFace.rotation.y = Math.PI; // カメラ側に正面を向ける（後ろ向き防止）
+    targetFace.position.set(0, 1.6, -25);
+    targetGroup.add(targetFace);
+
+    // 的の板っぽい厚み（薄い円柱）
+    const backGeo = new THREE.CylinderGeometry(targetRadius, targetRadius, 0.12, 48);
+    const backMat = new THREE.MeshStandardMaterial({ color: 0xd2b48c, roughness: 1.0 });
+    const back = new THREE.Mesh(backGeo, backMat);
+    back.position.copy(targetFace.position);
+    back.rotation.x = Math.PI / 2;   // 円柱を奥行き方向に
+    targetGroup.add(back);
+
+    // 支柱（棒）
+    const poleGeo = new THREE.CylinderGeometry(0.05, 0.06, 2.2, 16);
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x6b4f2a, roughness: 1.0 });
+    const pole = new THREE.Mesh(poleGeo, poleMat);
+    pole.position.set(0, 0.9, -25);
+    targetGroup.add(pole);
+
+    // 的の位置（グループ）
     scene.add(targetGroup);
-}
 
-createTarget();
+    // ----------------------------
+    // 弓（UIとしての見た目用：邪魔にならないよう細め&端に）
+    // ※ 要件に「弓」は書かれてないけど、雰囲気用に軽く表示
+    // ----------------------------
+    const bowGroup = new THREE.Group();
 
-// ===============================
-// マウス視点操作（簡易FPS）
-// ===============================
-let isMouseDown = false;
-let previousMousePosition = { x: 0, y: 0 };
+    // 弓の弧：細めのトーラス（大きめだと邪魔なので小さく/細く）
+    const bowGeo = new THREE.TorusGeometry(0.55, 0.03, 10, 64, Math.PI); // 半円
+    const bowMat = new THREE.MeshStandardMaterial({ color: 0x4b2e14, roughness: 1.0 });
+    const bow = new THREE.Mesh(bowGeo, bowMat);
 
-document.addEventListener('mousedown', () => {
-    isMouseDown = true;
-});
+    // 位置：画面右下寄り（サイトにかからない）
+    bow.position.set(0.55, -0.35, -0.9);
+    bow.rotation.z = Math.PI / 2;
+    bowGroup.add(bow);
 
-document.addEventListener('mouseup', () => {
-    isMouseDown = false;
-});
+    // 弦（細い線）
+    const stringMat = new THREE.LineBasicMaterial({ color: 0xffffff });
+    const stringPoints = [
+      new THREE.Vector3(0.55, -0.35 - 0.55, -0.9),
+      new THREE.Vector3(0.55, -0.35 + 0.55, -0.9),
+    ];
+    const stringGeo = new THREE.BufferGeometry().setFromPoints(stringPoints);
+    const bowString = new THREE.Line(stringGeo, stringMat);
+    bowGroup.add(bowString);
 
-document.addEventListener('mousemove', (event) => {
+    // 弓はカメラに追従させたいので、カメラの子にする
+    camera.add(bowGroup);
+    scene.add(camera);
 
-    if (!isMouseDown) return;
+    // ----------------------------
+    // 物理：矢の飛び方（簡易）
+    //  - 初速 + 重力
+    //  - 発射方向は「カメラが向いている方向（画面中央の奥）」固定
+    // ----------------------------
+    const GRAVITY = new THREE.Vector3(0, -9.8, 0); // m/s^2 相当
+    const ARROW_SPEED = 32;                         // 初速（好みで調整）
+    const MAX_LIFETIME = 8.0;                       // 矢の寿命（秒）※遠くまで飛ばすなら伸ばす
 
-    const deltaMove = {
-        x: event.offsetX - previousMousePosition.x,
-        y: event.offsetY - previousMousePosition.y
-    };
+    // ----------------------------
+    // 矢モデル
+    //  - 要件：太めにして見やすく
+    // ----------------------------
+    function createArrowMesh() {
+      // 矢の軸：少し太めの円柱（radius 0.02 → 見やすく）
+      const shaftGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.9, 12);
+      const shaftMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8 });
+      const shaft = new THREE.Mesh(shaftGeo, shaftMat);
 
-    camera.rotation.y -= deltaMove.x * 0.002;
-    camera.rotation.x -= deltaMove.y * 0.002;
+      // 先端：円錐
+      const tipGeo = new THREE.ConeGeometry(0.035, 0.12, 16);
+      const tipMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.4 });
+      const tip = new THREE.Mesh(tipGeo, tipMat);
+      tip.position.y = 0.9 / 2 + 0.06; // 軸の上に付ける
 
-    previousMousePosition = {
-        x: event.offsetX,
-        y: event.offsetY
-    };
-});
+      // 羽根：小さい板を3枚
+      const fletchGeo = new THREE.BoxGeometry(0.08, 0.02, 0.03);
+      const fletchMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
 
-// ===============================
-// 矢の作成
-// ===============================
-const arrows = [];
+      const f1 = new THREE.Mesh(fletchGeo, fletchMat);
+      const f2 = new THREE.Mesh(fletchGeo, fletchMat);
+      const f3 = new THREE.Mesh(fletchGeo, fletchMat);
 
-function shootArrow() {
+      // 軸の下側に配置
+      const baseY = -0.9 / 2 + 0.10;
+      f1.position.set(0.04, baseY, 0);
+      f2.position.set(-0.04, baseY, 0);
+      f3.position.set(0, baseY, 0.04);
+      f2.rotation.y = Math.PI / 2;
+      f3.rotation.x = Math.PI / 2;
 
-    // 矢のグループ
-    const arrowGroup = new THREE.Group();
+      // グループ化（矢全体）
+      const g = new THREE.Group();
+      g.add(shaft, tip, f1, f2, f3);
 
-    // 矢の棒（少し太めにする）
-    const shaftGeometry = new THREE.CylinderGeometry(0.05, 0.05, 2, 12);
-    const shaftMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
-    const shaft = new THREE.Mesh(shaftGeometry, shaftMaterial);
-    shaft.rotation.z = Math.PI / 2;
+      // デフォルトで「前向き（カメラ前方向）」にしたいので、
+      // ここでは矢が+Z方向へ向くような基準にしておく（後で回転で合わせる）
+      // CylinderはY軸方向に伸びるので、矢の進行方向をZに合わせるため回転
+      g.rotation.x = Math.PI / 2;
 
-    arrowGroup.add(shaft);
+      return g;
+    }
 
-    // 矢の位置をカメラ位置に設定
-    arrowGroup.position.copy(camera.position);
+    // ----------------------------
+    // 軌道（予測ライン）
+    //  - 要件：太めにして見やすく
+    //  - Lineは太さが効きにくいので TubeGeometry で太いチューブにする
+    // ----------------------------
+    let trajectoryMesh = null;
 
-    // カメラの向きを取得（画面中央方向）
-    const direction = new THREE.Vector3();
-    camera.getWorldDirection(direction);
+    function updateTrajectoryPreview() {
+      // 既にあるなら消して作り直す（軽量サンプルなので都度作り直し）
+      if (trajectoryMesh) {
+        scene.remove(trajectoryMesh);
+        trajectoryMesh.geometry.dispose();
+        trajectoryMesh.material.dispose();
+        trajectoryMesh = null;
+      }
 
-    arrowGroup.userData = {
-        velocity: direction.clone().multiplyScalar(1)
-    };
+      // カメラ中心からの発射位置（画面中央）
+      const start = getMuzzlePosition();
 
-    scene.add(arrowGroup);
-    arrows.push(arrowGroup);
-}
+      // 発射方向（画面中央の奥＝カメラ前方向）
+      const dir = getCameraForward().multiplyScalar(ARROW_SPEED);
 
-// クリックで発射
-document.addEventListener('click', shootArrow);
+      // 軌道のサンプリング（簡易：等間隔で位置を計算）
+      const points = [];
+      const step = 0.08; // 時間刻み（細かいほど滑らか）
+      const total = 2.2; // 予測表示秒数（好みで調整）
 
-// ===============================
-// アニメーションループ
-// ===============================
-function animate() {
-    requestAnimationFrame(animate);
+      for (let t = 0; t <= total; t += step) {
+        // 位置 = start + v*t + 1/2*g*t^2
+        const p = new THREE.Vector3()
+          .copy(start)
+          .addScaledVector(dir, t)
+          .addScaledVector(GRAVITY, 0.5 * t * t);
+        points.push(p);
+      }
 
-    arrows.forEach(arrow => {
+      // pointsから曲線を作る
+      const curve = new THREE.CatmullRomCurve3(points);
 
-        // 矢を前進させる
-        arrow.position.add(arrow.userData.velocity);
+      // 太い軌道：チューブ
+      const tubeGeo = new THREE.TubeGeometry(curve, 80, 0.03, 10, false); // 半径0.03で太め
+      const tubeMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.45,
+        roughness: 1.0
+      });
 
-        // 軌道を見やすくするために
-        // 少し回転させる
-        arrow.rotation.y += 0.1;
+      trajectoryMesh = new THREE.Mesh(tubeGeo, tubeMat);
+      scene.add(trajectoryMesh);
+    }
+
+    // ----------------------------
+    // 発射位置（カメラ中心から少し前）
+    //  - “画面中央から”感を出すため、カメラ位置＋前方オフセット
+    // ----------------------------
+    function getMuzzlePosition() {
+      const p = new THREE.Vector3();
+      camera.getWorldPosition(p);
+
+      // カメラの少し前に出す（カメラと重なると見えづらい）
+      const forward = getCameraForward();
+      p.addScaledVector(forward, 0.6);
+
+      // 少しだけ下げる（矢が画面中央から飛ぶけど、カメラ視界を邪魔しない）
+      // ここは好み。完全に中央にしたいなら 0 にする
+      p.y -= 0.03;
+
+      return p;
+    }
+
+    // カメラの「前方向」ベクトルを取得（ワールド空間）
+    function getCameraForward() {
+      const f = new THREE.Vector3(0, 0, -1);
+      f.applyQuaternion(camera.quaternion); // カメラ向きを反映
+      return f.normalize();
+    }
+
+    // ----------------------------
+    // 矢の管理（飛んでいる矢を配列で更新）
+    // ----------------------------
+    const arrows = [];
+
+    function shootArrow() {
+      // 矢メッシュ生成
+      const arrow = createArrowMesh();
+
+      // 発射位置：画面中央の奥へ（カメラ中心から）
+      const start = getMuzzlePosition();
+      arrow.position.copy(start);
+
+      // 発射方向（画面中央の奥＝カメラ前方向）
+      const forward = getCameraForward();
+
+      // 速度（ベクトル）＝ forward * 初速
+      const velocity = forward.clone().multiplyScalar(ARROW_SPEED);
+
+      // 矢の向きを速度方向へ合わせる
+      // ※矢はZ方向が前のつもりで作ったので lookAt で合わせる
+      const lookTarget = start.clone().add(forward);
+      arrow.lookAt(lookTarget);
+
+      scene.add(arrow);
+
+      // 矢の状態を登録
+      arrows.push({
+        mesh: arrow,
+        velocity,
+        age: 0,
+        stuck: false
+      });
+    }
+
+    // ----------------------------
+    // 当たり判定（簡易）
+    //  - 的は円盤なので「的の面の平面」と交差したら当たり扱い
+    //  - 当たったら矢を刺さった状態（速度0）にする
+    // ----------------------------
+    const targetPlaneNormal = new THREE.Vector3(0, 0, 1); // 的は -Z 方向を向く想定（調整しつつ）
+    const tmpVec = new THREE.Vector3();
+
+    function checkHit(arrowState, prevPos, nextPos) {
+      // 的の中心位置
+      const center = targetFace.getWorldPosition(new THREE.Vector3());
+
+      // 的の法線（ワールド）を計算（targetFaceの向きから）
+      const normal = targetPlaneNormal.clone().applyQuaternion(targetFace.getWorldQuaternion(new THREE.Quaternion())).normalize();
+
+      // 平面の式： (p - center)・normal = 0
+      // 線分(prevPos -> nextPos)が平面をまたぐかチェック
+      const d1 = prevPos.clone().sub(center).dot(normal);
+      const d2 = nextPos.clone().sub(center).dot(normal);
+
+      // 符号が同じなら平面を跨いでない（交差しない）
+      if (d1 * d2 > 0) return null;
+
+      // 交点のt（線形補間）
+      const t = d1 / (d1 - d2);
+      if (t < 0 || t > 1) return null;
+
+      // 交点を求める
+      const hitPos = prevPos.clone().lerp(nextPos, t);
+
+      // 交点が的の円内にあるか（中心からの距離）
+      // 的の平面上で距離を測るため、中心差分から法線方向成分を除去
+      tmpVec.copy(hitPos).sub(center);
+      const planar = tmpVec.clone().sub(normal.clone().multiplyScalar(tmpVec.dot(normal)));
+      const dist = planar.length();
+
+      if (dist <= targetRadius) {
+        return { hitPos, dist };
+      }
+      return null;
+    }
+
+    // 距離からスコア（中心に近いほど高得点）
+    function scoreFromDist(dist) {
+      // dist: 0 ~ targetRadius
+      // ざっくり 10点満点
+      const n = 1 - (dist / targetRadius);
+      return Math.max(1, Math.round(n * 10));
+    }
+
+    // ----------------------------
+    // HUD表示
+    // ----------------------------
+    const hud = document.getElementById("hud");
+    let totalScore = 0;
+    let hits = 0;
+    let shots = 0;
+
+    function updateHUD() {
+      hud.innerHTML = `
+        <div>Shots: <b>${shots}</b> / Hits: <b>${hits}</b> / Score: <b>${totalScore}</b></div>
+        <div style="opacity:.85">視点: マウス　/　左クリック: 発射　/　R: リセット</div>
+      `;
+    }
+    updateHUD();
+
+    // ----------------------------
+    // 入力（発射 / リセット）
+    // ----------------------------
+    window.addEventListener("mousedown", (e) => {
+      // PointerLock中のみ発射（意図しない発射防止）
+      if (!controls.isLocked) return;
+
+      // 左クリックのみ
+      if (e.button === 0) {
+        shootArrow();
+        shots++;
+        updateHUD();
+      }
     });
 
-    renderer.render(scene, camera);
-}
+    window.addEventListener("keydown", (e) => {
+      if (e.key.toLowerCase() === "r") resetAll();
+    });
 
-animate();
+    function resetAll() {
+      // 飛んでいる矢をすべて消す
+      for (const a of arrows) {
+        scene.remove(a.mesh);
+        // 簡易サンプルなのでdisposeは省略（本気ならジオメトリ/マテリアルも管理）
+      }
+      arrows.length = 0;
 
-// ===============================
-// ウィンドウリサイズ対応
-// ===============================
-window.addEventListener('resize', () => {
+      // スコア初期化
+      totalScore = 0; hits = 0; shots = 0;
+      updateHUD();
+    }
 
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    // ----------------------------
+    // ループ（アニメーション）
+    // ----------------------------
+    let last = performance.now();
 
-});
-</script>
+    function animate(now) {
+      requestAnimationFrame(animate);
 
+      // deltaTime（秒）
+      const dt = Math.min(0.033, (now - last) / 1000);
+      last = now;
+
+      // 毎フレーム、予測軌道を更新（視点変更に追従）
+      // ※重いと感じたら 0.1秒に1回など間引く
+      updateTrajectoryPreview();
+
+      // 矢の更新
+      for (let i = arrows.length - 1; i >= 0; i--) {
+        const a = arrows[i];
+        if (a.stuck) continue;
+
+        a.age += dt;
+
+        // 寿命超過で削除（遠くまで飛ばしたいならMAX_LIFETIMEを延ばす）
+        if (a.age > MAX_LIFETIME) {
+          scene.remove(a.mesh);
+          arrows.splice(i, 1);
+          continue;
+        }
+
+        // 前フレーム位置を保持（当たり判定用）
+        const prevPos = a.mesh.position.clone();
+
+        // 速度更新：v = v + g*dt
+        a.velocity.addScaledVector(GRAVITY, dt);
+
+        // 位置更新：p = p + v*dt
+        a.mesh.position.addScaledVector(a.velocity, dt);
+
+        const nextPos = a.mesh.position.clone();
+
+        // 矢の向きを速度方向へ追従（飛行中の見た目）
+        // 速度が小さすぎると不安定なので閾値
+        if (a.velocity.lengthSq() > 0.001) {
+          const dir = a.velocity.clone().normalize();
+          a.mesh.lookAt(a.mesh.position.clone().add(dir));
+        }
+
+        // 的との当たり判定
+        const hit = checkHit(a, prevPos, nextPos);
+        if (hit) {
+          // 刺さった位置に固定
+          a.mesh.position.copy(hit.hitPos);
+
+          // 刺さった瞬間の向き（速度方向）で固定
+          const dir = a.velocity.clone().normalize();
+          a.mesh.lookAt(a.mesh.position.clone().add(dir));
+
+          // “刺さった”状態：速度ゼロ & 更新停止
+          a.velocity.set(0, 0, 0);
+          a.stuck = true;
+
+          // スコア計算
+          const s = scoreFromDist(hit.dist);
+          totalScore += s;
+          hits++;
+          updateHUD();
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+    requestAnimationFrame(animate);
+
+    // ----------------------------
+    // リサイズ対応
+    // ----------------------------
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+  </script>
 </body>
 </html>
