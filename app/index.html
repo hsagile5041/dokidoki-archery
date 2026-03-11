@@ -307,19 +307,52 @@
     }
 
     function createGround() {
-      const ground = new THREE.Mesh(
-        new THREE.PlaneGeometry(1000, 1000),
-        new THREE.MeshStandardMaterial({
-          color: 0x4ea14e,
-          roughness: 1.0,
-          metalness: 0.0
-        })
-      );
 
-      ground.rotation.x = -Math.PI / 2;
-      ground.position.y = 0;
-      game.scene.add(ground);
+    // ===== 草テクスチャをCanvasで生成 =====
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 256;
+  
+    const ctx = canvas.getContext("2d");
+    
+    // ベースの草色
+    ctx.fillStyle = "#4ea14e";
+    ctx.fillRect(0, 0, 256, 256);
+
+    // 草の色ムラを作る
+    for (let i = 0; i < 5000; i++) {
+
+      const x = Math.random() * 256;
+      const y = Math.random() * 256;
+
+      const green = 120 + Math.random() * 80;
+
+      ctx.fillStyle = `rgb(${30 + Math.random()*30}, ${green}, ${30})`;
+      ctx.fillRect(x, y, 2, 2);
     }
+
+    // CanvasをThree.jsテクスチャに変換
+    const texture = new THREE.CanvasTexture(canvas);
+
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(60, 60);
+
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(1000, 1000),
+      new THREE.MeshStandardMaterial({
+        map: texture,
+        roughness: 1.0,
+        metalness: 0.0
+      })
+    );
+
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0;
+
+    game.scene.add(ground);
+  }
+
 
     function createSkyDecoration() {
       // 雲っぽいオブジェクトを遠景に置いて、少しだけ見た目を良くする
