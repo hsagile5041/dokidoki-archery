@@ -338,6 +338,7 @@
     function createEnvironment() {
       createLights();
       createGround();
+      setGradientSky()
       createSkyDecoration();
     }
 
@@ -398,6 +399,28 @@
 
     game.scene.add(ground);
   }
+
+  function setGradientSky() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1;
+      canvas.height = 256;
+      const ctx = canvas.getContext("2d");
+
+      // グラデーション: 上空は濃い青、下は少し明るめ
+      const gradient = ctx.createLinearGradient(0, 0, 0, 256);
+      gradient.addColorStop(0, "#0033cc"); // 上空: 深い青
+      gradient.addColorStop(0.7, "#3366ff"); // 中間: 少し明るめ
+      gradient.addColorStop(1, "#66a3ff");   // 地平線付近: 明るめ青
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 1, 256);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.magFilter = THREE.LinearFilter;
+
+      // 背景に設定
+      game.scene.background = texture;
+    }
 
 
     function createSkyDecoration() {
