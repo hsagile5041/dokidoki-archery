@@ -1,0 +1,172 @@
+function createBowModel() {
+  const bowGroup = new THREE.Group();
+
+  // ==========================================================
+  // このメソッドの役割
+  // ----------------------------------------------------------
+  // ・弓本体を作る
+  // ・弦を作る
+  // ・game.bowString に弦を入れる
+  // ・bowGroup を返す
+  //
+  // インターフェースは元のまま維持する。
+  // つまり、呼び出し側は変更しなくてよい。
+  // ==========================================================
+
+  // ----------------------------------------------------------
+  // 弓の基準位置
+  // ----------------------------------------------------------
+  // 以前と同じく画面右下寄りだが、
+  // 少しだけ中央寄り・少しだけ前寄りにして、
+  // 「矢の飛ぶ方向に向いている」印象を強める。
+  const bowBaseX = 0.66;
+  const bowBaseY = -0.33;
+  const bowBaseZ = -1.00;
+
+  // ----------------------------------------------------------
+  // 弓の見た目用マテリアル
+  // ----------------------------------------------------------
+  // 木っぽい色をベースにしつつ、ほんの少しだけ艶を持たせる。
+  const bowMat = new THREE.MeshStandardMaterial({
+    color: 0x4b2e14,
+    roughness: 0.92,
+    metalness: 0.02
+  });
+
+  // ----------------------------------------------------------
+  // 弓の「半円感」を残した本体
+  // ----------------------------------------------------------
+  // ベースは半トーラスだが、そのままだと“輪っか感”が強いので、
+  // 前後に少しつぶして細くし、さらに端を少し反らせる補助パーツを足す。
+  // これで「半円らしさを保ちつつ、実際の弓に少し近い形」にする。
+  // ----------------------------------------------------------
+
+  // メインの弓アーク（半円イメージの中心）
+  const bowArc = new THREE.Mesh(
+    new THREE.TorusGeometry(0.62, 0.022, 12, 96, Math.PI),
+    bowMat
+  );
+
+  // 半円を縦向きにして弓っぽい向きへ
+  bowArc.rotation.z = Math.PI / 2;
+
+  // 少しだけ奥方向へ向ける
+  // 元の -0.08 より深くして、矢の飛ぶ方向に寄せる
+  bowArc.rotation.y = -0.22;
+
+  // 少しだけ前傾して自然な構えっぽくする
+  bowArc.rotation.x = -0.03;
+
+  // 配置
+  bowArc.position.set(bowBaseX, bowBaseY, bowBaseZ);
+
+  // 前後方向を少し薄くして、“太い輪っか感”を減らす
+  bowArc.scale.set(1.00, 1.00, 0.72);
+
+  bowGroup.add(bowArc);
+
+  // ----------------------------------------------------------
+  // グリップ（握り部分）
+  // ----------------------------------------------------------
+  // 中央に少しだけ太い握りを入れると、かなり弓らしく見える。
+  // ----------------------------------------------------------
+  const grip = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.020, 0.020, 0.17, 12),
+    new THREE.MeshStandardMaterial({
+      color: 0x2f1c0d,
+      roughness: 0.90
+    })
+  );
+
+  grip.position.set(bowBaseX, bowBaseY, bowBaseZ);
+  grip.rotation.z = 0.02;
+  grip.rotation.y = -0.18;
+
+  bowGroup.add(grip);
+
+  // ----------------------------------------------------------
+  // 上下の先端を少し反らせる補助パーツ
+  // ----------------------------------------------------------
+  // 半トーラスだけだと綺麗すぎて“ただの半円”に見えやすい。
+  // そのため、上下端に細いカーブを追加して、
+  // 実際の弓の limb 先端が少し反っている感じを足す。
+  // ----------------------------------------------------------
+
+  const limbRadius = 0.010;
+
+  // 上端の補助カーブ
+  const upperTipCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0.00, 0.00, 0.00),
+    new THREE.Vector3(0.020, 0.040, -0.005),
+    new THREE.Vector3(0.045, 0.085, -0.015),
+    new THREE.Vector3(0.070, 0.115, -0.030)
+  ]);
+
+  const upperTip = new THREE.Mesh(
+    new THREE.TubeGeometry(upperTipCurve, 20, limbRadius, 8, false),
+    bowMat
+  );
+
+  // 下端の補助カーブ
+  const lowerTipCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0.00, 0.00, 0.00),
+    new THREE.Vector3(0.020, -0.040, -0.005),
+    new THREE.Vector3(0.045, -0.085, -0.015),
+    new THREE.Vector3(0.070, -0.115, -0.030)
+  ]);
+
+  const lowerTip = new THREE.Mesh(
+    new THREE.TubeGeometry(lowerTipCurve, 20, limbRadius, 8, false),
+    bowMat
+  );
+
+  // 半円アークの上下端あたりに合わせる
+  // ここは bowArc に合わせた“見た目位置”として調整している。
+  upperTip.position.set(bowBaseX + 0.015, bowBaseY + 0.62, bowBaseZ - 0.01);
+  upperTip.rotation.y = -0.22;
+  upperTip.rotation.z = 0.10;
+  upperTip.rotation.x = -0.03;
+
+  lowerTip.position.set(bowBaseX + 0.015, bowBaseY - 0.62, bowBaseZ - 0.01);
+  lowerTip.rotation.y = -0.22;
+  lowerTip.rotation.z = 0.10;
+  lowerTip.rotation.x = -0.03;
+
+  bowGroup.add(upperTip);
+  bowGroup.add(lowerTip);
+
+  // ----------------------------------------------------------
+  // 弦
+  // ----------------------------------------------------------
+  // 既存の updateBowDraw() が
+  // 「3点ラインの中央点(index=1)を後ろへ引く」想定なら、
+  // この構造を維持する必要がある。
+  //
+  // つまり、弦は
+  //   下端
+  //   中央（チャージで引かれる点）
+  //   上端
+  // の3点で作る。
+  //
+  // 今回は弓の向きに合わせて、少しだけ奥向きに配置している。
+  // ----------------------------------------------------------
+  const stringPoints = [
+    new THREE.Vector3(bowBaseX + 0.015, bowBaseY - 0.60, bowBaseZ - 0.010), // 下端
+    new THREE.Vector3(bowBaseX - 0.015, bowBaseY,        bowBaseZ + 0.000),  // 中央
+    new THREE.Vector3(bowBaseX + 0.015, bowBaseY + 0.60, bowBaseZ - 0.010)   // 上端
+  ];
+
+  const stringGeo = new THREE.BufferGeometry().setFromPoints(stringPoints);
+
+  const string = new THREE.Line(
+    stringGeo,
+    new THREE.LineBasicMaterial({
+      color: 0xf5f5f5
+    })
+  );
+
+  bowGroup.add(string);
+  game.bowString = string;
+
+  return bowGroup;
+}
