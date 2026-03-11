@@ -3,60 +3,131 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>3D Archery (Three.js r160 module)</title>
-  <style>
-    html, body { margin:0; height:100%; overflow:hidden; background:#87ceeb; }
-    #hud{
-      position:fixed; left:12px; top:12px; z-index:10;
-      padding:10px 12px; border-radius:8px;
-      background:rgba(0,0,0,.45); color:#fff;
-      font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
-      font-size:13px; line-height:1.5; user-select:none;
-    }
-    #crosshair{
-      position:fixed; left:50%; top:50%; z-index:10;
-      width:14px; height:14px; transform:translate(-50%,-50%);
-      pointer-events:none; opacity:.95;
-    }
-    #crosshair::before,#crosshair::after{
-      content:""; position:absolute; left:50%; top:50%;
-      transform:translate(-50%,-50%);
-      background:rgba(255,255,255,.95); border-radius:1px;
-    }
-    #crosshair::before{ width:14px; height:2px; }
-    #crosshair::after { width:2px; height:14px; }
+  <title>3D Archery Game</title>
 
-    #overlay{
-      position:fixed; inset:0; z-index:20;
-      display:grid; place-items:center;
-      background:rgba(0,0,0,.55); color:#fff;
-      font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
-      text-align:center; padding:20px;
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #87ceeb;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     }
-    #overlay.hidden{ display:none; }
-    .card{
-      max-width:640px;
-      background:rgba(255,255,255,.08);
-      border:1px solid rgba(255,255,255,.18);
-      border-radius:16px; padding:18px;
-      backdrop-filter: blur(6px);
+
+    #hud {
+      position: fixed;
+      left: 12px;
+      top: 12px;
+      z-index: 20;
+      min-width: 290px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.45);
+      color: #fff;
+      line-height: 1.55;
+      user-select: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,.18);
     }
-    .card h1{ font-size:18px; margin:0 0 10px; }
-    .card p{ margin:6px 0; opacity:.95; }
-    .kbd{
-      display:inline-block; padding:2px 8px; border-radius:8px;
-      background:rgba(255,255,255,.15);
-      border:1px solid rgba(255,255,255,.25);
+
+    #chargeWrap {
+      margin-top: 8px;
+      height: 10px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255,255,255,.16);
+      border: 1px solid rgba(255,255,255,.2);
     }
-    .err{
-      margin-top:10px; text-align:left; white-space:pre-wrap;
-      background:rgba(0,0,0,.35); padding:10px; border-radius:10px;
-      border:1px solid rgba(255,255,255,.15);
-      font-size:12px; opacity:.95;
+
+    #chargeBar {
+      width: 0%;
+      height: 100%;
+      background: rgba(255,255,255,.92);
+      transition: width 0.03s linear;
+    }
+
+    #crosshair {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: 18px;
+      height: 18px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 20;
+      filter: drop-shadow(0 1px 1px rgba(0,0,0,.35));
+    }
+
+    #crosshair::before,
+    #crosshair::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255,255,255,.96);
+      border-radius: 2px;
+    }
+
+    #crosshair::before { width: 18px; height: 2px; }
+    #crosshair::after  { width: 2px;  height: 18px; }
+
+    #overlay {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(0,0,0,.55);
+      color: #fff;
+      z-index: 30;
+      text-align: center;
+      padding: 20px;
+    }
+
+    #overlay.hidden {
+      display: none;
+    }
+
+    .card {
+      max-width: 780px;
+      padding: 20px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.18);
+      backdrop-filter: blur(8px);
+    }
+
+    .card h1 {
+      margin: 0 0 10px;
+      font-size: 20px;
+    }
+
+    .card p {
+      margin: 8px 0;
+      opacity: .96;
+    }
+
+    .kbd {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.14);
+      border: 1px solid rgba(255,255,255,.2);
+    }
+
+    #errorBox {
+      margin-top: 12px;
+      text-align: left;
+      white-space: pre-wrap;
+      padding: 10px;
+      border-radius: 10px;
+      background: rgba(0,0,0,.3);
+      border: 1px solid rgba(255,255,255,.15);
+      display: none;
+      font-size: 12px;
     }
   </style>
 
-  <!-- ★これが肝： "three" をどこから読むかブラウザに教える -->
+  <!-- import map で "three" の参照先を明示 -->
   <script type="importmap">
   {
     "imports": {
@@ -67,412 +138,751 @@
   </script>
 </head>
 <body>
-  <div id="hud"></div>
+  <div id="hud">
+    <div id="hudText"></div>
+    <div id="chargeWrap"><div id="chargeBar"></div></div>
+  </div>
+
   <div id="crosshair"></div>
 
   <div id="overlay">
     <div class="card">
       <h1>3Dアーチェリー</h1>
-      <p>クリックで開始（マウス固定 / PointerLock）</p>
-      <p><span class="kbd">左クリック</span>：発射　/　<span class="kbd">R</span>：リセット　/　<span class="kbd">ESC</span>：解除</p>
-      <p style="opacity:.85">矢は常に画面中央から奥へ。マウスで視点移動して照準を合わせます。</p>
-      <div id="err" class="err" style="display:none;"></div>
+      <p>画面クリックで開始（マウス固定）</p>
+      <p>
+        <span class="kbd">右クリック長押し</span> でチャージ →
+        <span class="kbd">右クリックを離す</span> で発射
+      </p>
+      <p>
+        <span class="kbd">R</span> でリロード /
+        <span class="kbd">ESC</span> でマウス解除
+      </p>
+      <p>矢は常に画面中央から奥へ飛び、矢の向きは水平のままです。</p>
+      <div id="errorBox"></div>
     </div>
   </div>
 
   <script type="module">
-    // ============================================================
-    // ユーザー指定：このimportを使う（OK）
-    // ============================================================
-    import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
-
-    // ★addons経由で読み込む（内部で "three" を参照するが importmap で解決される）
+    import * as THREE from "three";
     import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 
+    // ============================================================
+    // 3D アーチェリーゲーム
+    // ------------------------------------------------------------
+    // 役割ごとにメソッド分けして、後で修正しやすい構成にしている
+    //
+    // createCore()         : Scene / Camera / Renderer / Controls
+    // createEnvironment()  : 空・地面・照明・背景演出
+    // createTargetSystem() : 的
+    // createBowSystem()    : 弓と装填中の矢
+    // createArrowModel()   : 飛ぶ矢の共通モデル
+    // setupInput()         : 入力処理
+    // update*()            : 毎フレーム更新
+    // ============================================================
+
+    // ------------------------------------------------------------
+    // DOM
+    // ------------------------------------------------------------
     const overlay = document.getElementById("overlay");
-    const errBox  = document.getElementById("err");
-    const hud     = document.getElementById("hud");
+    const errorBox = document.getElementById("errorBox");
+    const hudText = document.getElementById("hudText");
+    const chargeBar = document.getElementById("chargeBar");
 
-    function showError(msg){
-      errBox.style.display = "block";
-      errBox.textContent = msg;
+    function showError(message) {
+      errorBox.style.display = "block";
+      errorBox.textContent = message;
     }
-    window.addEventListener("error", (e)=>{
-      if (errBox.style.display === "block") return;
-      showError("エラー:\n" + (e.message || e.error || e));
-    });
 
+    // ------------------------------------------------------------
+    // グローバル状態
+    // ------------------------------------------------------------
+    const game = {
+      scene: null,
+      camera: null,
+      renderer: null,
+      controls: null,
+      clock: new THREE.Clock(),
+
+      // ワールド
+      targetFace: null,
+      targetRadius: 0.8,
+
+      // 手元の弓まわり
+      bowRoot: null,
+      bowString: null,
+      loadedArrow: null,
+
+      // ゲーム状態
+      isCharging: false,
+      chargeTime: 0,
+      maxChargeTime: 1.7,
+      hasLoadedArrow: true,
+
+      shots: 0,
+      hits: 0,
+      score: 0,
+
+      // 発射済み矢
+      flyingArrows: [],
+
+      // 調整値
+      gravity: new THREE.Vector3(0, -9.8, 0),
+      minSpeed: 18,
+      maxSpeed: 56,
+      maxLifetime: 10.0
+    };
+
+    // ------------------------------------------------------------
+    // 起動
+    // ------------------------------------------------------------
     try {
-      // ----------------------------
-      // Scene / Camera / Renderer
-      // ----------------------------
-      const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x87ceeb); // 青空
+      init();
+      animate();
+    } catch (err) {
+      showError("初期化エラー:\n" + (err?.stack || err?.message || String(err)));
+    }
 
-      const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.01, 500);
-      camera.position.set(0, 1.6, 8);
+    // ============================================================
+    // 初期化
+    // ============================================================
+    function init() {
+      createCore();
+      createEnvironment();
+      createTargetSystem();
+      createBowSystem();
+      setupInput();
+      setupResize();
+      updateHUD();
+    }
 
-      const renderer = new THREE.WebGLRenderer({ antialias:true });
-      renderer.setSize(innerWidth, innerHeight);
-      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-      document.body.appendChild(renderer.domElement);
+    // ============================================================
+    // Core: Scene / Camera / Renderer / Controls
+    // ============================================================
+    function createCore() {
+      // シーン
+      game.scene = new THREE.Scene();
+      game.scene.background = new THREE.Color(0x87ceeb); // 青空
 
-      // ----------------------------
-      // Controls（マウス視点）
-      // ----------------------------
-      const controls = new PointerLockControls(camera, document.body);
-      overlay.addEventListener("click", ()=> controls.lock());
-      controls.addEventListener("lock",   ()=> overlay.classList.add("hidden"));
-      controls.addEventListener("unlock", ()=> overlay.classList.remove("hidden"));
+      // カメラ
+      game.camera = new THREE.PerspectiveCamera(
+        70,
+        window.innerWidth / window.innerHeight,
+        0.01,
+        800
+      );
+      game.camera.position.set(0, 1.6, 8);
 
-      // ----------------------------
-      // Light
-      // ----------------------------
-      scene.add(new THREE.HemisphereLight(0xffffff, 0x335566, 0.95));
+      // レンダラ
+      game.renderer = new THREE.WebGLRenderer({ antialias: true });
+      game.renderer.setSize(window.innerWidth, window.innerHeight);
+      game.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      document.body.appendChild(game.renderer.domElement);
+
+      // 視点操作
+      game.controls = new PointerLockControls(game.camera, document.body);
+
+      overlay.addEventListener("click", () => game.controls.lock());
+      game.controls.addEventListener("lock", () => overlay.classList.add("hidden"));
+      game.controls.addEventListener("unlock", () => overlay.classList.remove("hidden"));
+    }
+
+    // ============================================================
+    // Environment: 背景 / 地面 / 照明 / 背景デザイン
+    // ============================================================
+    function createEnvironment() {
+      createLights();
+      createGround();
+      createSkyDecoration();
+    }
+
+    function createLights() {
+      // 半球ライトで空と地面からの柔らかい光を表現
+      const hemi = new THREE.HemisphereLight(0xffffff, 0x335566, 0.95);
+      game.scene.add(hemi);
+
+      // 方向ライトで立体感を足す
       const dir = new THREE.DirectionalLight(0xffffff, 0.9);
-      dir.position.set(5,10,3);
-      scene.add(dir);
+      dir.position.set(8, 14, 4);
+      game.scene.add(dir);
+    }
 
-      // ----------------------------
-      // Ground
-      // ----------------------------
+    function createGround() {
       const ground = new THREE.Mesh(
-        new THREE.PlaneGeometry(400, 400),
-        new THREE.MeshStandardMaterial({ color:0x4c9a4c, roughness:1.0 })
+        new THREE.PlaneGeometry(1000, 1000),
+        new THREE.MeshStandardMaterial({
+          color: 0x4ea14e,
+          roughness: 1.0,
+          metalness: 0.0
+        })
       );
-      ground.rotation.x = -Math.PI/2;
-      scene.add(ground);
 
-      // ----------------------------
-      // Target texture (Canvas)
-      // ----------------------------
-      function createTargetTexture(size=512){
-        const c = document.createElement("canvas");
-        c.width = c.height = size;
-        const ctx = c.getContext("2d");
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = 0;
+      game.scene.add(ground);
+    }
 
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(0,0,size,size);
+    function createSkyDecoration() {
+      // 雲っぽいオブジェクトを遠景に置いて、少しだけ見た目を良くする
+      const cloudMat = new THREE.MeshStandardMaterial({
+        color: 0xdff0ff,
+        transparent: true,
+        opacity: 0.28,
+        roughness: 1.0
+      });
 
-        const cx=size/2, cy=size/2;
-        const rings = [
-          { r: 250, color:"#ffffff" },
-          { r: 200, color:"#111111" },
-          { r: 150, color:"#1e5bd7" },
-          { r: 100, color:"#d72626" },
-          { r:  55, color:"#f0d000" },
-          { r:  25, color:"#f0d000" },
-        ];
-
-        for (const ring of rings){
-          ctx.beginPath(); ctx.arc(cx,cy,ring.r,0,Math.PI*2);
-          ctx.closePath(); ctx.fillStyle = ring.color; ctx.fill();
-        }
-
-        ctx.strokeStyle = "rgba(0,0,0,0.25)";
-        ctx.lineWidth = 6;
-        for (const ring of rings){
-          ctx.beginPath(); ctx.arc(cx,cy,ring.r,0,Math.PI*2); ctx.stroke();
-        }
-
-        ctx.fillStyle="rgba(0,0,0,0.4)";
-        ctx.beginPath(); ctx.arc(cx,cy,6,0,Math.PI*2); ctx.fill();
-
-        const tex = new THREE.CanvasTexture(c);
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-        return tex;
+      for (let i = 0; i < 7; i++) {
+        const cloud = new THREE.Mesh(
+          new THREE.SphereGeometry(1.6 + Math.random() * 1.6, 16, 16),
+          cloudMat
+        );
+        cloud.position.set(
+          -24 + i * 8,
+          9 + Math.random() * 4,
+          -24 - Math.random() * 40
+        );
+        cloud.scale.set(1.9, 0.7, 0.9);
+        game.scene.add(cloud);
       }
+    }
 
-      // ----------------------------
-      // Target (archery)
-      // ----------------------------
+    // ============================================================
+    // Target: 的の生成
+    // ============================================================
+    function createTargetSystem() {
       const targetGroup = new THREE.Group();
-      const targetRadius = 0.7;
+      game.targetRadius = 0.8;
 
-      const targetFace = new THREE.Mesh(
-        new THREE.CircleGeometry(targetRadius, 64),
-        new THREE.MeshStandardMaterial({ map:createTargetTexture(), roughness:0.9 })
+      // 的の正面
+      const face = new THREE.Mesh(
+        new THREE.CircleGeometry(game.targetRadius, 64),
+        new THREE.MeshStandardMaterial({
+          map: createTargetTexture(),
+          roughness: 0.92
+        })
       );
-      targetFace.position.set(0, 1.6, -25);
-      targetFace.rotation.y = Math.PI;
-      targetGroup.add(targetFace);
+      face.position.set(0, 1.6, -30);
+      face.rotation.y = Math.PI;
+      targetGroup.add(face);
 
+      // 的の厚み
       const back = new THREE.Mesh(
-        new THREE.CylinderGeometry(targetRadius, targetRadius, 0.12, 48),
-        new THREE.MeshStandardMaterial({ color:0xd2b48c, roughness:1.0 })
+        new THREE.CylinderGeometry(game.targetRadius, game.targetRadius, 0.14, 48),
+        new THREE.MeshStandardMaterial({
+          color: 0xd2b48c,
+          roughness: 1.0
+        })
       );
-      back.position.copy(targetFace.position);
-      back.rotation.x = Math.PI/2;
+      back.position.copy(face.position);
+      back.rotation.x = Math.PI / 2;
       targetGroup.add(back);
 
+      // 支柱
       const pole = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.05, 0.06, 2.2, 16),
-        new THREE.MeshStandardMaterial({ color:0x6b4f2a, roughness:1.0 })
+        new THREE.CylinderGeometry(0.06, 0.07, 2.6, 16),
+        new THREE.MeshStandardMaterial({
+          color: 0x6b4f2a,
+          roughness: 1.0
+        })
       );
-      pole.position.set(0, 0.9, -25);
+      pole.position.set(0, 0.85, -30);
       targetGroup.add(pole);
 
-      scene.add(targetGroup);
+      game.targetFace = face;
+      game.scene.add(targetGroup);
+    }
 
-      // ----------------------------
-      // Bow (small, off-center)
-      // ----------------------------
+    function createTargetTexture(size = 512) {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext("2d");
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, size, size);
+
+      const cx = size / 2;
+      const cy = size / 2;
+
+      // アーチェリーの的っぽい同心円
+      const rings = [
+        { r: 250, color: "#ffffff" },
+        { r: 200, color: "#111111" },
+        { r: 150, color: "#1f5dd8" },
+        { r: 100, color: "#d12a2a" },
+        { r:  55, color: "#efcf00" },
+        { r:  25, color: "#efcf00" }
+      ];
+
+      for (const ring of rings) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, ring.r, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.fillStyle = ring.color;
+        ctx.fill();
+      }
+
+      // 輪郭線
+      ctx.strokeStyle = "rgba(0,0,0,0.25)";
+      ctx.lineWidth = 6;
+      for (const ring of rings) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, ring.r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // 中心点
+      ctx.fillStyle = "rgba(0,0,0,0.45)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = game.renderer.capabilities.getMaxAnisotropy();
+      return texture;
+    }
+
+    // ============================================================
+    // Bow: 弓と装填中の矢
+    // ============================================================
+    function createBowSystem() {
+      // bowRoot はカメラに追従する“手元”全体
+      const bowRoot = new THREE.Group();
+
+      // 弓本体
+      const bowGroup = createBowModel();
+      bowRoot.add(bowGroup);
+
+      // 装填中の矢
+      const loadedArrow = createArrowModel();
+      bowRoot.add(loadedArrow);
+
+      // カメラにぶら下げる
+      game.camera.add(bowRoot);
+      game.scene.add(game.camera);
+
+      game.bowRoot = bowRoot;
+      game.loadedArrow = loadedArrow;
+
+      updateLoadedArrowVisual();
+      updateBowDraw(0);
+    }
+
+    function createBowModel() {
       const bowGroup = new THREE.Group();
-      const bow = new THREE.Mesh(
-        new THREE.TorusGeometry(0.55, 0.03, 10, 64, Math.PI),
-        new THREE.MeshStandardMaterial({ color:0x4b2e14, roughness:1.0 })
+
+      // 弓の弧
+      const bowArc = new THREE.Mesh(
+        new THREE.TorusGeometry(0.62, 0.035, 12, 72, Math.PI),
+        new THREE.MeshStandardMaterial({
+          color: 0x4b2e14,
+          roughness: 1.0
+        })
       );
-      bow.position.set(0.55, -0.35, -0.9);
-      bow.rotation.z = Math.PI/2;
-      bowGroup.add(bow);
 
-      const stringGeo = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0.55, -0.35-0.55, -0.9),
-        new THREE.Vector3(0.55, -0.35+0.55, -0.9),
-      ]);
-      bowGroup.add(new THREE.Line(stringGeo, new THREE.LineBasicMaterial({ color:0xffffff })));
+      // 右下寄りで、前を向くように配置
+      bowArc.position.set(0.70, -0.34, -1.02);
+      bowArc.rotation.z = Math.PI / 2;
+      bowArc.rotation.y = -0.08;
+      bowGroup.add(bowArc);
 
-      camera.add(bowGroup);
-      scene.add(camera);
+      // 弦は3点で作る
+      const points = [
+        new THREE.Vector3(0.70, -0.34 - 0.62, -1.02),
+        new THREE.Vector3(0.70, -0.34,        -1.02),
+        new THREE.Vector3(0.70, -0.34 + 0.62, -1.02)
+      ];
 
-      // ----------------------------
-      // Physics
-      // ----------------------------
-      const GRAVITY = new THREE.Vector3(0, -9.8, 0);
-      const ARROW_SPEED = 32;
-      const MAX_LIFETIME = 8.0;
+      const stringGeo = new THREE.BufferGeometry().setFromPoints(points);
+      const string = new THREE.Line(
+        stringGeo,
+        new THREE.LineBasicMaterial({ color: 0xffffff })
+      );
 
-      function getCameraForward(){
-        return new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion).normalize();
-      }
+      bowGroup.add(string);
+      game.bowString = string;
 
-      function getMuzzlePosition(){
-        const p = new THREE.Vector3();
-        camera.getWorldPosition(p);
-        p.addScaledVector(getCameraForward(), 0.6);
-        p.y -= 0.03;
-        return p;
-      }
+      return bowGroup;
+    }
 
-      // ----------------------------
-      // Arrow model (thicker)
-      // ----------------------------
-      function createArrowMesh(){
-        const shaft = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.02, 0.02, 0.9, 12),
-          new THREE.MeshStandardMaterial({ color:0x333333, roughness:0.8 })
-        );
+    // ============================================================
+    // Arrow: 矢モデル生成
+    // ------------------------------------------------------------
+    // この矢モデルは「+X方向に矢じりが向く」基準で作る。
+    // そうすると、後で進行方向へ回すのが簡単になる。
+    // ============================================================
+    function createArrowModel() {
+      const group = new THREE.Group();
 
-        const tip = new THREE.Mesh(
-          new THREE.ConeGeometry(0.035, 0.12, 16),
-          new THREE.MeshStandardMaterial({ color:0x888888, roughness:0.4 })
-        );
-        tip.position.y = 0.9/2 + 0.06;
+      // 軸（見やすいよう少し太め）
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.022, 0.022, 0.95, 12),
+        new THREE.MeshStandardMaterial({
+          color: 0x2f2f2f,
+          roughness: 0.82
+        })
+      );
+      shaft.rotation.z = -Math.PI / 2;
+      group.add(shaft);
 
-        const fMat = new THREE.MeshStandardMaterial({ color:0xffffff, roughness:0.9 });
-        const f1 = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.02,0.03), fMat);
-        const f2 = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.02,0.03), fMat);
-        const f3 = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.02,0.03), fMat);
+      // 矢じり
+      const tip = new THREE.Mesh(
+        new THREE.ConeGeometry(0.040, 0.14, 16),
+        new THREE.MeshStandardMaterial({
+          color: 0x8d8d8d,
+          roughness: 0.35
+        })
+      );
+      tip.rotation.z = -Math.PI / 2;
+      tip.position.x = 0.95 / 2 + 0.07;
+      group.add(tip);
 
-        const baseY = -0.9/2 + 0.10;
-        f1.position.set( 0.04, baseY, 0);
-        f2.position.set(-0.04, baseY, 0); f2.rotation.y = Math.PI/2;
-        f3.position.set( 0.00, baseY, 0.04); f3.rotation.x = Math.PI/2;
+      // 羽根
+      const featherMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.9
+      });
 
-        const g = new THREE.Group();
-        g.add(shaft, tip, f1, f2, f3);
+      const featherX = -0.95 / 2 + 0.10;
 
-        // CylinderがY軸方向なので、矢の前方基準をZに合わせる
-        g.rotation.x = Math.PI/2;
-        return g;
-      }
+      const f1 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.08, 0.01), featherMat);
+      f1.position.set(featherX, 0.035, 0.0);
 
-      // ----------------------------
-      // Trajectory preview (thick tube)
-      // ----------------------------
-      let trajectoryMesh = null;
+      const f2 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.08, 0.01), featherMat);
+      f2.position.set(featherX, -0.018, 0.030);
+      f2.rotation.x = Math.PI / 2;
 
-      function updateTrajectoryPreview(){
-        if (trajectoryMesh){
-          scene.remove(trajectoryMesh);
-          trajectoryMesh.geometry.dispose();
-          trajectoryMesh.material.dispose();
-          trajectoryMesh = null;
+      const f3 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.08, 0.01), featherMat);
+      f3.position.set(featherX, -0.018, -0.030);
+      f3.rotation.x = Math.PI / 2;
+
+      group.add(f1, f2, f3);
+
+      return group;
+    }
+
+    // ============================================================
+    // Input
+    // ============================================================
+    function setupInput() {
+      // 右クリックメニューを止める
+      window.addEventListener("contextmenu", (e) => e.preventDefault());
+
+      // 右クリック押下でチャージ開始
+      window.addEventListener("mousedown", (e) => {
+        if (e.button !== 2) return;
+        beginCharge();
+      });
+
+      // 右クリックを離したら発射
+      window.addEventListener("mouseup", (e) => {
+        if (e.button !== 2) return;
+        releaseArrow();
+      });
+
+      // Rでリロード
+      window.addEventListener("keydown", (e) => {
+        if (e.key.toLowerCase() === "r") {
+          reloadArrow();
         }
+      });
+    }
 
-        const start = getMuzzlePosition();
-        const v0 = getCameraForward().multiplyScalar(ARROW_SPEED);
+    function setupResize() {
+      window.addEventListener("resize", () => {
+        game.camera.aspect = window.innerWidth / window.innerHeight;
+        game.camera.updateProjectionMatrix();
+        game.renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    }
 
-        const points = [];
-        const step = 0.08;
-        const total = 2.2;
+    // ============================================================
+    // チャージ / 発射 / リロード
+    // ============================================================
+    function beginCharge() {
+      if (!game.controls.isLocked) return;
+      if (!game.hasLoadedArrow) return;
 
-        for (let t=0; t<=total; t+=step){
-          const p = new THREE.Vector3()
-            .copy(start)
-            .addScaledVector(v0, t)
-            .addScaledVector(GRAVITY, 0.5*t*t);
-          points.push(p);
-        }
+      game.isCharging = true;
+      game.chargeTime = 0;
+    }
 
-        const curve = new THREE.CatmullRomCurve3(points);
-        const tubeGeo = new THREE.TubeGeometry(curve, 80, 0.03, 10, false);
-        const tubeMat = new THREE.MeshStandardMaterial({
-          color:0xffffff, transparent:true, opacity:0.45, roughness:1.0
-        });
+    function releaseArrow() {
+      // チャージ中でなければ何もしない
+      if (!game.isCharging) return;
 
-        trajectoryMesh = new THREE.Mesh(tubeGeo, tubeMat);
-        scene.add(trajectoryMesh);
-      }
+      game.isCharging = false;
 
-      // ----------------------------
-      // Arrows update
-      // ----------------------------
-      const arrows = [];
+      // 矢が装填されていなければ発射しない
+      if (!game.hasLoadedArrow) return;
 
-      function shootArrow(){
-        const arrow = createArrowMesh();
+      // 0〜1 のチャージ率
+      const chargeRatio = THREE.MathUtils.clamp(
+        game.chargeTime / game.maxChargeTime,
+        0,
+        1
+      );
 
-        const start = getMuzzlePosition();
-        arrow.position.copy(start);
+      // チャージが長いほど遠くへ
+      const speed = THREE.MathUtils.lerp(game.minSpeed, game.maxSpeed, chargeRatio);
 
-        const forward = getCameraForward();
-        const velocity = forward.clone().multiplyScalar(ARROW_SPEED);
+      // カメラ前方向を水平化
+      const horizontalDir = getHorizontalForward();
 
-        arrow.lookAt(start.clone().add(forward));
-        scene.add(arrow);
+      // 飛ぶ矢を新規生成
+      const arrow = createArrowModel();
 
-        arrows.push({ mesh:arrow, velocity, age:0, stuck:false });
-      }
+      // 発射位置は画面中央の少し前
+      arrow.position.copy(getMuzzlePosition());
 
-      // ----------------------------
-      // Hit test
-      // ----------------------------
-      const tmp = new THREE.Vector3();
+      // 矢じりを進行方向に向ける
+      orientArrowHorizontally(arrow, horizontalDir);
 
-      function checkHit(prevPos, nextPos){
-        const center = targetFace.getWorldPosition(new THREE.Vector3());
-        const normal = new THREE.Vector3(0,0,1)
-          .applyQuaternion(targetFace.getWorldQuaternion(new THREE.Quaternion()))
-          .normalize();
+      game.scene.add(arrow);
 
-        const d1 = prevPos.clone().sub(center).dot(normal);
-        const d2 = nextPos.clone().sub(center).dot(normal);
-        if (d1*d2 > 0) return null;
+      // 速度
+      // 姿勢は水平固定だが、少しだけ上方向速度を足して自然に見せる
+      const velocity = horizontalDir.clone().multiplyScalar(speed);
+      velocity.y += 1.5 + 2.3 * chargeRatio;
 
-        const t = d1/(d1-d2);
-        if (t<0 || t>1) return null;
+      game.flyingArrows.push({
+        mesh: arrow,
+        velocity,
+        age: 0,
+        horizontalDir: horizontalDir.clone(),
+        stuck: false
+      });
 
-        const hitPos = prevPos.clone().lerp(nextPos, t);
+      // 装填矢を消す
+      game.hasLoadedArrow = false;
+      game.shots++;
 
-        tmp.copy(hitPos).sub(center);
-        const planar = tmp.clone().sub(normal.clone().multiplyScalar(tmp.dot(normal)));
-        const dist = planar.length();
-
-        if (dist <= targetRadius) return { hitPos, dist };
-        return null;
-      }
-
-      function scoreFromDist(dist){
-        const n = 1 - dist/targetRadius;
-        return Math.max(1, Math.round(n*10));
-      }
-
-      // ----------------------------
-      // HUD
-      // ----------------------------
-      let totalScore=0, hits=0, shots=0;
-      function updateHUD(){
-        hud.innerHTML = `
-          <div>Shots: <b>${shots}</b> / Hits: <b>${hits}</b> / Score: <b>${totalScore}</b></div>
-          <div style="opacity:.85">視点: マウス / 左クリック: 発射 / R: リセット</div>
-        `;
-      }
+      updateLoadedArrowVisual();
+      updateBowDraw(0);
       updateHUD();
+    }
 
-      // ----------------------------
-      // Input
-      // ----------------------------
-      addEventListener("mousedown", (e)=>{
-        if (!controls.isLocked) return;
-        if (e.button === 0){
-          shootArrow();
-          shots++;
-          updateHUD();
-        }
-      });
+    function reloadArrow() {
+      game.hasLoadedArrow = true;
+      game.isCharging = false;
+      game.chargeTime = 0;
 
-      addEventListener("keydown", (e)=>{
-        if (e.key.toLowerCase() === "r"){
-          for (const a of arrows) scene.remove(a.mesh);
-          arrows.length = 0;
-          totalScore=0; hits=0; shots=0;
-          updateHUD();
-        }
-      });
+      updateLoadedArrowVisual();
+      updateBowDraw(0);
+      updateHUD();
+    }
 
-      // ----------------------------
-      // Main loop
-      // ----------------------------
-      let last = performance.now();
-      function animate(now){
-        requestAnimationFrame(animate);
-        const dt = Math.min(0.033, (now-last)/1000);
-        last = now;
+    // ============================================================
+    // 手元の弓矢の見た目更新
+    // ============================================================
+    function updateLoadedArrowVisual() {
+      if (!game.loadedArrow) return;
 
-        updateTrajectoryPreview();
+      game.loadedArrow.visible = game.hasLoadedArrow;
 
-        for (let i=arrows.length-1; i>=0; i--){
-          const a = arrows[i];
-          if (a.stuck) continue;
+      if (!game.hasLoadedArrow) return;
 
-          a.age += dt;
-          if (a.age > MAX_LIFETIME){
-            scene.remove(a.mesh);
-            arrows.splice(i, 1);
-            continue;
-          }
+      // 手元の矢の位置
+      game.loadedArrow.position.set(0.28, -0.20, -0.98);
 
-          const prevPos = a.mesh.position.clone();
+      // 手元の矢も前向き（奥向き）にしておく
+      orientArrowHorizontally(game.loadedArrow, new THREE.Vector3(0, 0, -1));
+    }
 
-          a.velocity.addScaledVector(GRAVITY, dt);
-          a.mesh.position.addScaledVector(a.velocity, dt);
+    function updateBowDraw(ratio) {
+      const drawRatio = THREE.MathUtils.clamp(ratio, 0, 1);
 
-          const nextPos = a.mesh.position.clone();
+      if (!game.bowString) return;
 
-          if (a.velocity.lengthSq() > 0.001){
-            const d = a.velocity.clone().normalize();
-            a.mesh.lookAt(a.mesh.position.clone().add(d));
-          }
+      // 弦の中央だけ手前に引く
+      const pullAmount = -0.24 * drawRatio;
 
-          const hit = checkHit(prevPos, nextPos);
-          if (hit){
-            a.mesh.position.copy(hit.hitPos);
-            const s = scoreFromDist(hit.dist);
-            totalScore += s; hits++;
-            updateHUD();
+      const pos = game.bowString.geometry.attributes.position;
+      pos.setXYZ(1, 0.70, -0.34, -1.02 + pullAmount);
+      pos.needsUpdate = true;
 
-            a.velocity.set(0,0,0);
-            a.stuck = true;
-          }
-        }
-
-        renderer.render(scene, camera);
+      // 装填中の矢も一緒に引く
+      if (game.loadedArrow && game.loadedArrow.visible) {
+        game.loadedArrow.position.z = -0.98 + pullAmount;
       }
+    }
+
+    // ============================================================
+    // 方向・姿勢
+    // ============================================================
+    function getHorizontalForward() {
+      const dir = new THREE.Vector3(0, 0, -1);
+      dir.applyQuaternion(game.camera.quaternion);
+
+      // 水平成分だけ使う
+      dir.y = 0;
+
+      // 真上/真下近くを向いた時の保険
+      if (dir.lengthSq() < 1e-6) {
+        dir.set(0, 0, -1);
+      }
+
+      dir.normalize();
+      return dir;
+    }
+
+    function getMuzzlePosition() {
+      const pos = new THREE.Vector3();
+      game.camera.getWorldPosition(pos);
+
+      // 画面中央から少し前へ
+      const forward = new THREE.Vector3(0, 0, -1)
+        .applyQuaternion(game.camera.quaternion)
+        .normalize();
+
+      pos.addScaledVector(forward, 0.85);
+
+      // ほんの少し下げて視認性を上げる
+      pos.y -= 0.05;
+
+      return pos;
+    }
+
+    function orientArrowHorizontally(arrow, horizontalDir) {
+      // この矢モデルは +X が先端方向
+      const from = new THREE.Vector3(1, 0, 0);
+      const to = horizontalDir.clone().normalize();
+
+      const q = new THREE.Quaternion().setFromUnitVectors(from, to);
+      arrow.quaternion.copy(q);
+    }
+
+    // ============================================================
+    // 当たり判定 / スコア
+    // ============================================================
+    function checkTargetHit(prevPos, nextPos) {
+      const center = game.targetFace.getWorldPosition(new THREE.Vector3());
+
+      // 的の法線
+      const normal = new THREE.Vector3(0, 0, 1)
+        .applyQuaternion(game.targetFace.getWorldQuaternion(new THREE.Quaternion()))
+        .normalize();
+
+      const d1 = prevPos.clone().sub(center).dot(normal);
+      const d2 = nextPos.clone().sub(center).dot(normal);
+
+      // 平面を跨いでいなければヒットしない
+      if (d1 * d2 > 0) return null;
+
+      const t = d1 / (d1 - d2);
+      if (t < 0 || t > 1) return null;
+
+      const hitPos = prevPos.clone().lerp(nextPos, t);
+
+      const offset = hitPos.clone().sub(center);
+      const planar = offset.sub(normal.clone().multiplyScalar(offset.dot(normal)));
+      const dist = planar.length();
+
+      if (dist <= game.targetRadius) {
+        return { hitPos, dist };
+      }
+
+      return null;
+    }
+
+    function scoreFromDistance(dist) {
+      const normalized = 1 - dist / game.targetRadius;
+      return Math.max(1, Math.round(normalized * 10));
+    }
+
+    // ============================================================
+    // HUD
+    // ============================================================
+    function updateHUD() {
+      const ratio = THREE.MathUtils.clamp(game.chargeTime / game.maxChargeTime, 0, 1);
+      const percent = Math.round(ratio * 100);
+
+      chargeBar.style.width = (game.isCharging ? percent : 0) + "%";
+
+      hudText.innerHTML = `
+        <div>Loaded: <b>${game.hasLoadedArrow ? "YES" : "NO"}</b>（Rでリロード）</div>
+        <div>Charge: <b>${game.isCharging ? percent + "%" : "-"}</b></div>
+        <div>Shots: <b>${game.shots}</b> / Hits: <b>${game.hits}</b> / Score: <b>${game.score}</b></div>
+      `;
+    }
+
+    // ============================================================
+    // 更新
+    // ============================================================
+    function animate() {
       requestAnimationFrame(animate);
 
-      // ----------------------------
-      // Resize
-      // ----------------------------
-      addEventListener("resize", ()=>{
-        camera.aspect = innerWidth/innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(innerWidth, innerHeight);
-      });
+      const dt = Math.min(0.033, game.clock.getDelta());
 
-    } catch (e) {
-      showError("初期化エラー:\n" + (e?.stack || e?.message || e));
+      updateCharge(dt);
+      updateFlyingArrows(dt);
+      updateHUD();
+
+      game.renderer.render(game.scene, game.camera);
+    }
+
+    function updateCharge(dt) {
+      if (!game.isCharging) return;
+
+      game.chargeTime = Math.min(game.maxChargeTime, game.chargeTime + dt);
+
+      const ratio = game.chargeTime / game.maxChargeTime;
+      updateBowDraw(ratio);
+    }
+
+    function updateFlyingArrows(dt) {
+      for (let i = game.flyingArrows.length - 1; i >= 0; i--) {
+        const arrowData = game.flyingArrows[i];
+
+        if (arrowData.stuck) continue;
+
+        arrowData.age += dt;
+
+        // 長く飛びすぎた矢は削除
+        if (arrowData.age > game.maxLifetime) {
+          game.scene.remove(arrowData.mesh);
+          game.flyingArrows.splice(i, 1);
+          continue;
+        }
+
+        const prevPos = arrowData.mesh.position.clone();
+
+        // 重力反映
+        arrowData.velocity.addScaledVector(game.gravity, dt);
+
+        // 位置更新
+        arrowData.mesh.position.addScaledVector(arrowData.velocity, dt);
+
+        const nextPos = arrowData.mesh.position.clone();
+
+        // --------------------------------------------------------
+        // 要件:
+        // 矢は「地面と平行の向き」のまま
+        // 矢じりは「進行方向（水平成分）」を向く
+        //
+        // つまり、落下しても矢は上下に傾けない。
+        // 発射時に決めた水平向きを維持する。
+        // --------------------------------------------------------
+        orientArrowHorizontally(arrowData.mesh, arrowData.horizontalDir);
+
+        // 地面に落ちたら停止
+        if (arrowData.mesh.position.y <= 0.05) {
+          arrowData.mesh.position.y = 0.05;
+          arrowData.velocity.set(0, 0, 0);
+          arrowData.stuck = true;
+          continue;
+        }
+
+        // 的ヒット判定
+        const hit = checkTargetHit(prevPos, nextPos);
+        if (hit) {
+          arrowData.mesh.position.copy(hit.hitPos);
+          arrowData.velocity.set(0, 0, 0);
+          arrowData.stuck = true;
+
+          game.hits++;
+          game.score += scoreFromDistance(hit.dist);
+        }
+      }
     }
   </script>
 </body>
