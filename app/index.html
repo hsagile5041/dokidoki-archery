@@ -437,38 +437,48 @@
       const cx = size / 2;
       const cy = size / 2;
 
-      // アーチェリーの的っぽい同心円
+      // アーチェリーの的 (FITA/WA 標準ターゲット配色)
+      // 外側から中心に向かって描画
+      const unit = (size / 2) / 10;
+
       const rings = [
-        { r: 250, color: "#ffffff" },
-        { r: 200, color: "#111111" },
-        { r: 150, color: "#1f5dd8" },
-        { r: 100, color: "#d12a2a" },
-        { r:  55, color: "#efcf00" },
-        { r:  25, color: "#efcf00" }
+        // White (1, 2)
+        { r: unit * 10, color: "#ffffff", stroke: "#d0d0d0" },
+        { r: unit * 9,  color: "#ffffff", stroke: "#d0d0d0" },
+        // Black (3, 4)
+        { r: unit * 8,  color: "#111111", stroke: "#555555" },
+        { r: unit * 7,  color: "#111111", stroke: "#555555" },
+        // Blue (5, 6)
+        { r: unit * 6,  color: "#0099ff", stroke: "rgba(0,0,0,0.2)" },
+        { r: unit * 5,  color: "#0099ff", stroke: "rgba(0,0,0,0.2)" },
+        // Red (7, 8)
+        { r: unit * 4,  color: "#ff0000", stroke: "rgba(0,0,0,0.2)" },
+        { r: unit * 3,  color: "#ff0000", stroke: "rgba(0,0,0,0.2)" },
+        // Gold (9, 10)
+        { r: unit * 2,  color: "#ffe500", stroke: "rgba(160,140,0,0.4)" },
+        { r: unit * 1,  color: "#ffe500", stroke: "rgba(160,140,0,0.4)" }
       ];
+
+      ctx.lineWidth = size * 0.003; // 少し細めの線
 
       for (const ring of rings) {
         ctx.beginPath();
         ctx.arc(cx, cy, ring.r, 0, Math.PI * 2);
         ctx.closePath();
+        
         ctx.fillStyle = ring.color;
         ctx.fill();
-      }
-
-      // 輪郭線
-      ctx.strokeStyle = "rgba(0,0,0,0.25)";
-      ctx.lineWidth = 6;
-      for (const ring of rings) {
-        ctx.beginPath();
-        ctx.arc(cx, cy, ring.r, 0, Math.PI * 2);
+        
+        ctx.strokeStyle = ring.stroke;
         ctx.stroke();
       }
 
-      // 中心点
-      ctx.fillStyle = "rgba(0,0,0,0.45)";
-      ctx.beginPath();
-      ctx.arc(cx, cy, 6, 0, Math.PI * 2);
-      ctx.fill();
+      // 中心点 (+)
+      ctx.fillStyle = "#222222";
+      ctx.font = `bold ${unit * 0.6}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("+", cx, cy);
 
       const texture = new THREE.CanvasTexture(canvas);
       texture.colorSpace = THREE.SRGBColorSpace;
