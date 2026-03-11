@@ -225,6 +225,20 @@
       // 発射済み矢
       flyingArrows: [],
 
+      // 追従カメラ
+      followArrow: null,
+      isHoldingOnImpact: false,
+      isReturningCamera: false,
+      impactHoldTime: 0,
+      impactHoldDuration: 3.0,
+      savedCameraPosition: new THREE.Vector3(),
+      savedCameraQuaternion: new THREE.Quaternion(),
+      followOffsetDistance: 3.2,
+      followOffsetHeight: 0.65,
+      followLookAhead: 5.0,
+      followLerpSpeed: 6.5,
+      returnLerpSpeed: 5.5,
+
       // 調整値
       gravity: new THREE.Vector3(0, -9.8, 0),
       minSpeed: 18,
@@ -271,6 +285,8 @@
         800
       );
       game.camera.position.set(0, 1.6, 8);
+      game.savedCameraPosition.copy(game.camera.position);
+      game.savedCameraQuaternion.copy(game.camera.quaternion);
 
       // レンダラ
       game.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -868,6 +884,7 @@
     // ============================================================
     function beginCharge() {
       if (!game.controls.isLocked) return;
+      if (isCameraInCinematicMode()) return;
       if (!game.hasLoadedArrow) return;
 
       game.isCharging = true;
@@ -912,13 +929,15 @@
       const velocity = horizontalDir.clone().multiplyScalar(speed);
       velocity.y += 1.5 + 2.3 * chargeRatio;
 
-      game.flyingArrows.push({
+      const arrowData = {
         mesh: arrow,
         velocity,
         age: 0,
         horizontalDir: horizontalDir.clone(),
         stuck: false
-      });
+      };
+      game.flyingArrows.push(arrowData);
+      startArrowFollow(arrowData);
 
       // 装填矢を消す
       game.hasLoadedArrow = false;
@@ -1019,6 +1038,109 @@
       arrow.quaternion.copy(q);
     }
 
+    function isCameraInCinematicMode() {
+      return !!game.followArrow || game.isHoldingOnImpact || game.isReturningCamera;
+    }
+
+    function startArrowFollow(arrowData) {
+      game.savedCameraPosition.copy(game.camera.position);
+      game.savedCameraQuaternion.copy(game.camera.quaternion);
+      game.followArrow = arrowData;
+      game.isHoldingOnImpact = false;
+      game.isReturningCamera = false;
+      game.impactHoldTime = 0;
+
+      if (game.bowRoot) {
+        game.bowRoot.visible = false;
+      }
+    }
+
+    function startImpactHold() {
+      if (!game.followArrow || game.isHoldingOnImpact) return;
+
+      game.isHoldingOnImpact = true;
+      game.impactHoldTime = 0;
+    }
+
+    function startCameraReturn() {
+      if (!isCameraInCinematicMode()) return;
+
+      game.followArrow = null;
+      game.isHoldingOnImpact = false;
+      game.isReturningCamera = true;
+      game.impactHoldTime = 0;
+    }
+
+    function finishCameraReturn() {
+      game.camera.position.copy(game.savedCameraPosition);
+      game.camera.quaternion.copy(game.savedCameraQuaternion);
+      game.followArrow = null;
+      game.isHoldingOnImpact = false;
+      game.isReturningCamera = false;
+      game.impactHoldTime = 0;
+
+      if (game.bowRoot) {
+        game.bowRoot.visible = true;
+      }
+    }
+
+    function updateCameraFollow(dt) {
+      if (game.followArrow) {
+        const arrowData = game.followArrow;
+
+        if (!arrowData.mesh.parent) {
+          startCameraReturn();
+          return;
+        }
+
+        const followDir = arrowData.horizontalDir.clone().normalize();
+        const targetPosition = arrowData.mesh.position.clone()
+          .addScaledVector(followDir, -game.followOffsetDistance);
+        targetPosition.y += game.followOffsetHeight;
+
+        const followAlpha = 1 - Math.exp(-game.followLerpSpeed * dt);
+        game.camera.position.lerp(targetPosition, followAlpha);
+
+        const lookTarget = arrowData.mesh.position.clone()
+          .addScaledVector(followDir, game.followLookAhead);
+        const lookMatrix = new THREE.Matrix4().lookAt(
+          game.camera.position,
+          lookTarget,
+          game.camera.up
+        );
+        const targetQuaternion = new THREE.Quaternion().setFromRotationMatrix(lookMatrix);
+        game.camera.quaternion.slerp(targetQuaternion, followAlpha);
+
+        if (arrowData.stuck) {
+          startImpactHold();
+          game.impactHoldTime += dt;
+
+          if (game.impactHoldTime >= game.impactHoldDuration) {
+            startCameraReturn();
+          }
+        }
+        return;
+      }
+
+      if (!game.isReturningCamera) {
+        if (game.bowRoot) {
+          game.bowRoot.visible = true;
+        }
+        return;
+      }
+
+      const returnAlpha = 1 - Math.exp(-game.returnLerpSpeed * dt);
+      game.camera.position.lerp(game.savedCameraPosition, returnAlpha);
+      game.camera.quaternion.slerp(game.savedCameraQuaternion, returnAlpha);
+
+      if (
+        game.camera.position.distanceToSquared(game.savedCameraPosition) < 1e-4 &&
+        game.camera.quaternion.angleTo(game.savedCameraQuaternion) < 0.01
+      ) {
+        finishCameraReturn();
+      }
+    }
+
     // ============================================================
     // 当たり判定 / スコア
     // ============================================================
@@ -1063,12 +1185,20 @@
     function updateHUD() {
       const ratio = THREE.MathUtils.clamp(game.chargeTime / game.maxChargeTime, 0, 1);
       const percent = Math.round(ratio * 100);
+      const cameraMode = game.followArrow
+        ? game.isHoldingOnImpact
+          ? "HOLD"
+          : "FOLLOW"
+        : game.isReturningCamera
+          ? "RETURN"
+          : "PLAYER";
 
       chargeBar.style.width = (game.isCharging ? percent : 0) + "%";
 
       hudText.innerHTML = `
         <div>Loaded: <b>${game.hasLoadedArrow ? "YES" : "NO"}</b>（Rでリロード）</div>
         <div>Charge: <b>${game.isCharging ? percent + "%" : "-"}</b></div>
+        <div>Camera: <b>${cameraMode}</b></div>
         <div>Shots: <b>${game.shots}</b> / Hits: <b>${game.hits}</b> / Score: <b>${game.score}</b></div>
       `;
     }
@@ -1083,6 +1213,7 @@
 
       updateCharge(dt);
       updateFlyingArrows(dt);
+      updateCameraFollow(dt);
       updateHUD();
 
       game.renderer.render(game.scene, game.camera);
