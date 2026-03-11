@@ -384,6 +384,8 @@
     function createTargetSystem() {
       const targetGroup = new THREE.Group();
       game.targetRadius = 0.8;
+      const targetThickness = 0.14;
+      const targetCenter = new THREE.Vector3(0, 1.6, -30);
 
       // 的の正面
       const face = new THREE.Mesh(
@@ -393,19 +395,19 @@
           roughness: 0.92
         })
       );
-      face.position.set(0, 1.6, -30);
-      face.rotation.y = Math.PI;
+      face.position.copy(targetCenter);
+      face.position.z += targetThickness / 2 + 0.01;
       targetGroup.add(face);
 
       // 的の厚み
       const back = new THREE.Mesh(
-        new THREE.CylinderGeometry(game.targetRadius, game.targetRadius, 0.14, 48),
+        new THREE.CylinderGeometry(game.targetRadius, game.targetRadius, targetThickness, 48, 1, true),
         new THREE.MeshStandardMaterial({
           color: 0xd2b48c,
           roughness: 1.0
         })
       );
-      back.position.copy(face.position);
+      back.position.copy(targetCenter);
       back.rotation.x = Math.PI / 2;
       targetGroup.add(back);
 
@@ -424,7 +426,7 @@
       game.scene.add(targetGroup);
     }
 
-    function createTargetTexture(size = 512) {
+    function createTargetTexture(size = 1024) {
       const canvas = document.createElement("canvas");
       canvas.width = canvas.height = size;
       const ctx = canvas.getContext("2d");
@@ -470,6 +472,9 @@
 
       const texture = new THREE.CanvasTexture(canvas);
       texture.colorSpace = THREE.SRGBColorSpace;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = true;
       texture.anisotropy = game.renderer.capabilities.getMaxAnisotropy();
       return texture;
     }
