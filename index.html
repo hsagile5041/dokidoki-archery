@@ -788,61 +788,126 @@
   return bowGroup;
 }
 
-    // ============================================================
-    // Arrow: 矢モデル生成
-    // ------------------------------------------------------------
-    // この矢モデルは「+X方向に矢じりが向く」基準で作る。
-    // そうすると、後で進行方向へ回すのが簡単になる。
-    // ============================================================
-    function createArrowModel() {
-      const group = new THREE.Group();
+  // ============================================================
+// Arrow: 矢モデル生成
+// ------------------------------------------------------------
+// この矢モデルは「+X方向に矢じりが向く」基準で作る。
+// そうすると、後で進行方向へ回すのが簡単になる。
+// ============================================================
+function createArrowModel() {
+  const group = new THREE.Group();
 
-      // 軸（見やすいよう少し太め）
-      const shaft = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.022, 0.022, 0.95, 12),
-        new THREE.MeshStandardMaterial({
-          color: 0x2f2f2f,
-          roughness: 0.82
-        })
-      );
-      shaft.rotation.z = -Math.PI / 2;
-      group.add(shaft);
+  // 軸（細め）
+  const shaftRadius = 0.012;
+  const shaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(shaftRadius, shaftRadius, 0.95, 12),
+    new THREE.MeshStandardMaterial({
+      color: 0x2f2f2f,
+      roughness: 0.82
+    })
+  );
+  shaft.rotation.z = -Math.PI / 2;
+  group.add(shaft);
 
-      // 矢じり
-      const tip = new THREE.Mesh(
-        new THREE.ConeGeometry(0.040, 0.14, 16),
-        new THREE.MeshStandardMaterial({
-          color: 0x8d8d8d,
-          roughness: 0.35
-        })
-      );
-      tip.rotation.z = -Math.PI / 2;
-      tip.position.x = 0.95 / 2 + 0.07;
-      group.add(tip);
+  // 矢じり（円錐、軸よりしっかり大きめ）
+  const tip = new THREE.Mesh(
+    new THREE.ConeGeometry(0.032, 0.16, 18),
+    new THREE.MeshStandardMaterial({
+      color: 0x8d8d8d,
+      roughness: 0.35
+    })
+  );
+  tip.rotation.z = -Math.PI / 2;
+  tip.position.x = 0.95 / 2 + 0.08;
+  group.add(tip);
 
-      // 羽根
-      const featherMat = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        roughness: 0.9
-      });
+  // 羽根材質
+  const featherBaseMat = new THREE.MeshStandardMaterial({
+    color: 0xf28c28,
+    roughness: 0.88,
+    side: THREE.DoubleSide
+  });
 
-      const featherX = -0.95 / 2 + 0.10;
+  // 羽の取り付け位置（後方）
+  const featherX = -0.95 / 2 + 0.13;
 
-      const f1 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.08, 0.01), featherMat);
-      f1.position.set(featherX, 0.035, 0.0);
+  // ------------------------------------------------------------
+  // 羽形状
+  // ------------------------------------------------------------
+  // ローカル座標で
+  // - X: 矢の進行方向
+  // - Y: 軸から外側へ立ち上がる方向
+  // - Z: 羽の薄み
+  //
+  // y = 0 の下辺（最長辺）が「軸に接着される辺」
+  // になるように形状を作る
+  // ------------------------------------------------------------
+  function createVaneGeometry() {
+    const shape = new THREE.Shape();
 
-      const f2 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.08, 0.01), featherMat);
-      f2.position.set(featherX, -0.018, 0.030);
-      f2.rotation.x = Math.PI / 2;
+    // 最長辺（接地辺）
+    shape.moveTo(-0.060, 0.000);
+    shape.lineTo( 0.082, 0.000);
 
-      const f3 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.08, 0.01), featherMat);
-      f3.position.set(featherX, -0.018, -0.030);
-      f3.rotation.x = Math.PI / 2;
+    // 上側輪郭
+    shape.lineTo( 0.088, 0.010);
+    shape.lineTo( 0.078, 0.030);
+    shape.lineTo( 0.058, 0.046);
+    shape.lineTo( 0.028, 0.056);
+    shape.lineTo(-0.004, 0.043);
+    shape.lineTo(-0.028, 0.026);
+    shape.lineTo(-0.046, 0.012);
+    shape.lineTo(-0.060, 0.000);
+    shape.closePath();
 
-      group.add(f1, f2, f3);
+    const geom = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.0012,
+      bevelEnabled: false
+    });
 
-      return group;
-    }
+    // 薄み方向の中心を原点へ
+    geom.translate(0, 0, -0.0006);
+
+    return geom;
+  }
+
+  const featherGeom = createVaneGeometry();
+
+  // 接着面を少しだけ軸の外へ逃がしてZ-fightingを防ぐ
+  const contactLift = 0.0002;
+
+  function createFeather(radialAngle, color) {
+    const mat = featherBaseMat.clone();
+    mat.color.setHex(color);
+
+    const feather = new THREE.Mesh(featherGeom, mat);
+
+    // 羽の前後を反転
+    feather.scale.x = -1;
+
+    // 軸周りに回転
+    feather.rotation.x = radialAngle;
+
+    // y=0 の最長辺全体が軸に接するように配置
+    feather.position.set(
+      featherX,
+      Math.cos(radialAngle) * (shaftRadius + contactLift),
+      Math.sin(radialAngle) * (shaftRadius + contactLift)
+    );
+
+    return feather;
+  }
+
+  // 4枚の薄い羽
+  const f1 = createFeather(0,             0xf28c28);
+  const f2 = createFeather(Math.PI / 2,   0xffffff);
+  const f3 = createFeather(Math.PI,       0xf28c28);
+  const f4 = createFeather(Math.PI * 1.5, 0xffffff);
+
+  group.add(f1, f2, f3, f4);
+
+  return group;
+}
 
     // ============================================================
     // Input
