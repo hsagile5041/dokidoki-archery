@@ -1,0 +1,43 @@
+以下の弓の描画メソッドをインターフェースは変えずにより精密にしたい。
+具体的には以下
+１. 弓を実際の弓に近い感じに
+２．向きをもっと矢の飛ぶ方向に合わせる
+３．チャージ時は弦は後ろに伸びるように
+
+    
+    function createBowModel() {
+      const bowGroup = new THREE.Group();
+
+      // 弓の弧
+      const bowArc = new THREE.Mesh(
+        new THREE.TorusGeometry(0.62, 0.035, 12, 72, Math.PI),
+        new THREE.MeshStandardMaterial({
+          color: 0x4b2e14,
+          roughness: 1.0
+        })
+      );
+
+      // 右下寄りで、前を向くように配置
+      bowArc.position.set(0.70, -0.34, -1.02);
+      bowArc.rotation.z = Math.PI / 2;
+      bowArc.rotation.y = -0.08;
+      bowGroup.add(bowArc);
+
+      // 弦は3点で作る
+      const points = [
+        new THREE.Vector3(0.70, -0.34 - 0.62, -1.02),
+        new THREE.Vector3(0.70, -0.34,        -1.02),
+        new THREE.Vector3(0.70, -0.34 + 0.62, -1.02)
+      ];
+
+      const stringGeo = new THREE.BufferGeometry().setFromPoints(points);
+      const string = new THREE.Line(
+        stringGeo,
+        new THREE.LineBasicMaterial({ color: 0xffffff })
+      );
+
+      bowGroup.add(string);
+      game.bowString = string;
+
+      return bowGroup;
+    }
