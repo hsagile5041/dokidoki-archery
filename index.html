@@ -962,7 +962,7 @@
       if (!game.bowString) return;
 
       // 弦の中央だけ手前に引く
-      const pullAmount = -0.24 * drawRatio;
+      const pullAmount = 0.24 * drawRatio;
 
       const pos = game.bowString.geometry.attributes.position;
       pos.setXYZ(1, 0.70, -0.34, -1.02 + pullAmount);
