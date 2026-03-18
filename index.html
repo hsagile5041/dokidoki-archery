@@ -105,6 +105,17 @@
       display: grid;
     }
 
+    #gameOverScreen.isCelebration {
+      color: #f7fbff;
+      text-shadow:
+        0 0 10px rgba(180, 242, 255, 0.95),
+        0 0 22px rgba(90, 210, 255, 0.8),
+        0 0 42px rgba(76, 146, 255, 0.68),
+        0 0 64px rgba(185, 120, 255, 0.42),
+        0 10px 28px rgba(0, 0, 0, 0.32);
+      animation: congratulations-neon 2.2s ease-in-out infinite alternate;
+    }
+
     #celebrationLayer {
       position: fixed;
       inset: 0;
@@ -158,6 +169,26 @@
           translate3d(var(--confetti-drift-x, 0vw), var(--confetti-fall-distance, 110vh), 0)
           rotate(var(--confetti-rotate-end, 540deg))
           scale(1.05);
+      }
+    }
+
+    @keyframes congratulations-neon {
+      0% {
+        text-shadow:
+          0 0 8px rgba(180, 242, 255, 0.8),
+          0 0 16px rgba(90, 210, 255, 0.62),
+          0 0 30px rgba(76, 146, 255, 0.5),
+          0 0 48px rgba(185, 120, 255, 0.28),
+          0 10px 28px rgba(0, 0, 0, 0.32);
+      }
+
+      100% {
+        text-shadow:
+          0 0 12px rgba(205, 248, 255, 1),
+          0 0 26px rgba(120, 224, 255, 0.88),
+          0 0 48px rgba(89, 170, 255, 0.72),
+          0 0 72px rgba(198, 132, 255, 0.42),
+          0 10px 28px rgba(0, 0, 0, 0.32);
       }
     }
 
@@ -1564,6 +1595,10 @@ async function sendScoreToExternal(score) {
       game.chargeTime = 0;
       finishCameraReturn();
       overlay.classList.add("hidden");
+      const isCelebration = game.score >= 11;
+      gameOverScreen.textContent =
+        isCelebration ? "CONGRATULATIONS!!" : "GAME OVER";
+      gameOverScreen.classList.toggle("isCelebration", isCelebration);
       gameOverScreen.classList.add("visible");
 
       updateBowDraw(0);
