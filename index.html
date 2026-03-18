@@ -446,26 +446,44 @@
   }
 
   function setGradientSky() {
-      const canvas = document.createElement("canvas");
-      canvas.width = 1;
-      canvas.height = 256;
-      const ctx = canvas.getContext("2d");
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d");
 
-      // グラデーション: 上空は濃い青、下は少し明るめ
-      const gradient = ctx.createLinearGradient(0, 0, 0, 256);
-      gradient.addColorStop(0, "#0033cc"); // 上空: 深い青
-      gradient.addColorStop(0.7, "#3366ff"); // 中間: 少し明るめ
-      gradient.addColorStop(1, "#66a3ff");   // 地平線付近: 明るめ青
+    const gradient = ctx.createLinearGradient(0, 0, 0, 512);
 
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, 1, 256);
+    // 上空（深い青〜少し紫）
+    gradient.addColorStop(0, "#0b1d51");
 
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.magFilter = THREE.LinearFilter;
+    // 中間（濃い青）
+    gradient.addColorStop(0.3, "#1e3fa3");
 
-      // 背景に設定
-      game.scene.background = texture;
-    }
+    // 少し明るい青
+    gradient.addColorStop(0.55, "#3f77ff");
+
+    // 地平線付近（霞っぽい）
+    gradient.addColorStop(0.8, "#87bfff");
+
+    // 一番下（白に近い青）
+    gradient.addColorStop(1, "#d6ecff");
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 1, 512);
+
+    // ☀️ 太陽っぽいハイライト（ほんのり）
+    const sunGradient = ctx.createRadialGradient(0.5, 400, 10, 0.5, 400, 120);
+    sunGradient.addColorStop(0, "rgba(255,255,255,0.25)");
+    sunGradient.addColorStop(1, "rgba(255,255,255,0)");
+
+    ctx.fillStyle = sunGradient;
+    ctx.fillRect(0, 0, 1, 512);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.magFilter = THREE.LinearFilter;
+
+    game.scene.background = texture;
+  }
 
 
     function createSkyDecoration() {
