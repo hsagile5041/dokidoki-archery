@@ -238,6 +238,18 @@
     const errorBox = document.getElementById("errorBox");
     const hudText = document.getElementById("hudText");
     const chargeBar = document.getElementById("chargeBar");
+    const WIND_DIRECTIONS = [
+      {
+        label: "左",
+        symbol: "←",
+        vector: new THREE.Vector3(-1, 0, 0)
+      },
+      {
+        label: "右",
+        symbol: "→",
+        vector: new THREE.Vector3(1, 0, 0)
+      }
+    ];
 
     function showError(message) {
       errorBox.style.display = "block";
@@ -295,6 +307,11 @@
 
       // 調整値
       gravity: new THREE.Vector3(0, -9.8, 0),
+      windAccelerationScale: 1.35,
+      wind: {
+        directionIndex: 0,
+        speed: 0
+      },
       minSpeed: 18,
       maxSpeed: 56,
       maxLifetime: 10.0
@@ -1209,6 +1226,21 @@ function createArrowModel() {
       return pos;
     }
 
+    function getCurrentWindDirection() {
+      return WIND_DIRECTIONS[game.wind.directionIndex] || WIND_DIRECTIONS[0];
+    }
+
+    function getWindAcceleration() {
+      return getCurrentWindDirection().vector
+        .clone()
+        .multiplyScalar(game.wind.speed * game.windAccelerationScale);
+    }
+
+    function randomizeWind() {
+      game.wind.directionIndex = Math.floor(Math.random() * WIND_DIRECTIONS.length);
+      game.wind.speed = THREE.MathUtils.lerp(1.5, 7.0, Math.random());
+    }
+
     function orientArrowHorizontally(arrow, horizontalDir) {
       // この矢モデルは +X が先端方向
       const from = new THREE.Vector3(1, 0, 0);
@@ -1358,6 +1390,7 @@ function createArrowModel() {
     }
 
     function startGame() {
+      randomizeWind();
       game.hasStarted = true;
       game.timeRemaining = game.timeLimit;
       updateHUD();
@@ -1430,6 +1463,10 @@ async function sendScoreToExternal(score) {
     function updateHUD() {
       const ratio = THREE.MathUtils.clamp(game.chargeTime / game.maxChargeTime, 0, 1);
       const percent = Math.round(ratio * 100);
+      const windDirection = getCurrentWindDirection();
+      const windText = game.hasStarted
+        ? `${windDirection.label} ${windDirection.symbol} / ${game.wind.speed.toFixed(1)} m/s`
+        : "-";
       const cameraMode = game.followArrow
         ? game.isHoldingOnImpact
           ? "WAIT"
@@ -1446,6 +1483,7 @@ async function sendScoreToExternal(score) {
         <div>Camera: <b>${cameraMode}</b></div>
         <div>Shots: <b>${game.shots}</b> / Hits: <b>${game.hits}</b> / Score: <b>${game.score}</b></div>
         <div>Time Limit: <b>${formatTimeRemaining(game.timeRemaining)}</b></div>
+        <div>Wind: <b>${windText}</b></div>
       `;
     }
 
@@ -1497,6 +1535,13 @@ async function sendScoreToExternal(score) {
 
         // 重力反映
         arrowData.velocity.addScaledVector(game.gravity, dt);
+        arrowData.velocity.addScaledVector(getWindAcceleration(), dt);
+
+        const horizontalVelocity = arrowData.velocity.clone();
+        horizontalVelocity.y = 0;
+        if (horizontalVelocity.lengthSq() > 1e-6) {
+          arrowData.horizontalDir.copy(horizontalVelocity.normalize());
+        }
 
         // 位置更新
         arrowData.mesh.position.addScaledVector(arrowData.velocity, dt);
@@ -1506,10 +1551,10 @@ async function sendScoreToExternal(score) {
         // --------------------------------------------------------
         // 要件:
         // 矢は「地面と平行の向き」のまま
-        // 矢じりは「進行方向（水平成分）」を向く
+        // 矢じりは「現在の進行方向（水平成分）」を向く
         //
         // つまり、落下しても矢は上下に傾けない。
-        // 発射時に決めた水平向きを維持する。
+        // 風で横流れしても、向きは水平のまま追従する。
         // --------------------------------------------------------
         orientArrowHorizontally(arrowData.mesh, arrowData.horizontalDir);
 
