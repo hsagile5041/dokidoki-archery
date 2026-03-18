@@ -197,11 +197,11 @@
       <div class="card">
         <p>画面クリックで開始（マウス固定）</p>
         <p>
-          <span class="kbd">右クリック長押し</span> でチャージ →
-          <span class="kbd">右クリックを離す</span> で発射
+          <span class="kbd">左クリック長押し</span> でチャージ →
+          <span class="kbd">左クリックを離す</span> で発射
         </p>
         <p>
-          <span class="kbd">R</span> でリロード /
+          矢が止まったら <span class="kbd">左クリック</span> で元の視点に戻る /
           <span class="kbd">ESC</span> でマウス解除
         </p>
         <p>矢は常に画面中央から奥へ飛び、矢の向きは水平のままです。</p>
@@ -285,7 +285,6 @@
       isHoldingOnImpact: false,
       isReturningCamera: false,
       impactHoldTime: 0,
-      impactHoldDuration: 3.0,
       savedCameraPosition: new THREE.Vector3(),
       savedCameraQuaternion: new THREE.Quaternion(),
       followOffsetDistance: 3.2,
@@ -1006,26 +1005,22 @@ function createArrowModel() {
     // Input
     // ============================================================
     function setupInput() {
-      // 右クリックメニューを止める
-      window.addEventListener("contextmenu", (e) => e.preventDefault());
-
-      // 右クリック押下でチャージ開始
+      // 左クリック押下でチャージ開始 / 停止後なら元視点へ戻る
       window.addEventListener("mousedown", (e) => {
-        if (e.button !== 2) return;
+        if (e.button !== 0) return;
+
+        if (game.followArrow && game.isHoldingOnImpact) {
+          startCameraReturn();
+          return;
+        }
+
         beginCharge();
       });
 
-      // 右クリックを離したら発射
+      // 左クリックを離したら発射
       window.addEventListener("mouseup", (e) => {
-        if (e.button !== 2) return;
+        if (e.button !== 0) return;
         releaseArrow();
-      });
-
-      // Rでリロード
-      window.addEventListener("keydown", (e) => {
-        if (e.key.toLowerCase() === "r") {
-          reloadArrow();
-        }
       });
     }
 
@@ -1243,6 +1238,8 @@ function createArrowModel() {
       if (game.bowRoot) {
         game.bowRoot.visible = true;
       }
+
+      reloadArrow();
     }
 
     function updateCameraFollow(dt) {
@@ -1275,10 +1272,6 @@ function createArrowModel() {
         if (arrowData.stuck) {
           startImpactHold();
           game.impactHoldTime += dt;
-
-          if (game.impactHoldTime >= game.impactHoldDuration) {
-            startCameraReturn();
-          }
         }
         return;
       }
@@ -1388,7 +1381,7 @@ function createArrowModel() {
       const percent = Math.round(ratio * 100);
       const cameraMode = game.followArrow
         ? game.isHoldingOnImpact
-          ? "HOLD"
+          ? "WAIT"
           : "FOLLOW"
         : game.isReturningCamera
           ? "RETURN"
@@ -1397,7 +1390,7 @@ function createArrowModel() {
       chargeBar.style.width = (game.isCharging ? percent : 0) + "%";
 
       hudText.innerHTML = `
-        <div>Loaded: <b>${game.hasLoadedArrow ? "YES" : "NO"}</b>（Rでリロード）</div>
+        <div>Loaded: <b>${game.hasLoadedArrow ? "YES" : "NO"}</b></div>
         <div>Charge: <b>${game.isCharging ? percent + "%" : "-"}</b></div>
         <div>Camera: <b>${cameraMode}</b></div>
         <div>Shots: <b>${game.shots}</b> / Hits: <b>${game.hits}</b> / Score: <b>${game.score}</b></div>
