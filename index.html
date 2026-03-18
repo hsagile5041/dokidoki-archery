@@ -300,6 +300,12 @@
       maxLifetime: 10.0
     };
 
+    // ============================================================
+　　// 外部連携設定（PowerShell受信用）
+　　// ============================================================
+　　const SCORE_POST_URL = "http://localhost:5000/score"; // PowerShell側
+　　const ENABLE_SCORE_POST = true; // ON/OFF切り替え
+
     // ------------------------------------------------------------
     // 起動
     // ------------------------------------------------------------
@@ -1339,6 +1345,30 @@ function createArrowModel() {
       updateHUD();
     }
 
+// ============================================================
+// スコア送信（PowerShell連携）
+// ※失敗しても絶対にエラーにしない
+// ============================================================
+async function sendScoreToExternal(score) {
+  if (!ENABLE_SCORE_POST) return;
+
+  try {
+    await fetch(SCORE_POST_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        score: score,
+        timestamp: new Date().toISOString()
+      })
+    });
+  } catch (e) {
+    // ★重要：完全に無視（エラーにしない）
+    console.warn("スコア送信失敗（無視）", e);
+  }
+}
+
     function endGame() {
       if (game.isGameOver) return;
 
@@ -1357,6 +1387,9 @@ function createArrowModel() {
       if (game.controls.isLocked) {
         game.controls.unlock();
       }
+
+      // スコア送信（非同期・失敗しても無視）
+      sendScoreToExternal(game.score);
     }
 
     function updateTimer(dt) {
