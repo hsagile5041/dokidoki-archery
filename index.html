@@ -105,6 +105,62 @@
       display: grid;
     }
 
+    #celebrationLayer {
+      position: fixed;
+      inset: 0;
+      z-index: 15;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .confetti-burst {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .confetti-piece {
+      position: absolute;
+      top: -18vh;
+      width: var(--confetti-width, 10px);
+      height: var(--confetti-height, 18px);
+      left: var(--confetti-left, 50vw);
+      opacity: 0;
+      border-radius: 2px;
+      background:
+        linear-gradient(
+          135deg,
+          rgba(255,255,255,0.85) 0%,
+          rgba(255,255,255,0.18) 28%,
+          var(--confetti-color, #ffffff) 28%,
+          var(--confetti-color, #ffffff) 100%
+        );
+      box-shadow: 0 0 10px rgba(255,255,255,0.25);
+      animation: confetti-fall var(--confetti-duration, 3s) ease-out var(--confetti-delay, 0s) forwards;
+      transform: translate3d(0, 0, 0) rotate(var(--confetti-rotate-start, 0deg));
+      transform-origin: center;
+      will-change: transform, opacity;
+    }
+
+    @keyframes confetti-fall {
+      0% {
+        opacity: 0;
+        transform: translate3d(0, -10vh, 0) rotate(var(--confetti-rotate-start, 0deg)) scale(0.8);
+      }
+
+      12% {
+        opacity: 1;
+      }
+
+      100% {
+        opacity: 0;
+        transform:
+          translate3d(var(--confetti-drift-x, 0vw), var(--confetti-fall-distance, 110vh), 0)
+          rotate(var(--confetti-rotate-end, 540deg))
+          scale(1.05);
+      }
+    }
+
     .card {
       max-width: 780px;
       padding: 20px;
@@ -188,6 +244,7 @@
   </div>
 
   <div id="crosshair"></div>
+  <div id="celebrationLayer" aria-hidden="true"></div>
 
   <div id="overlay">
     <div class="overlayStack">
@@ -238,6 +295,7 @@
     const errorBox = document.getElementById("errorBox");
     const hudText = document.getElementById("hudText");
     const chargeBar = document.getElementById("chargeBar");
+    const celebrationLayer = document.getElementById("celebrationLayer");
     const WIND_DIRECTIONS = [
       {
         label: "左",
@@ -250,6 +308,16 @@
         vector: new THREE.Vector3(1, 0, 0)
       }
     ];
+    const CONFETTI_COLORS = [
+      "#ffe066",
+      "#ff8fab",
+      "#7bdff2",
+      "#b8f2a1",
+      "#cdb4ff",
+      "#ffffff"
+    ];
+    const CONFETTI_PIECES_PER_HIT = 40;
+    const MAX_ACTIVE_CONFETTI_BURSTS = 3;
 
     function showError(message) {
       errorBox.style.display = "block";
@@ -1389,6 +1457,52 @@ function createArrowModel() {
       return Math.max(1, Math.round(normalized * 10));
     }
 
+    function triggerHitCelebration() {
+      if (!celebrationLayer) return;
+
+      while (celebrationLayer.childElementCount >= MAX_ACTIVE_CONFETTI_BURSTS) {
+        celebrationLayer.firstElementChild?.remove();
+      }
+
+      const burst = document.createElement("div");
+      burst.className = "confetti-burst";
+
+      let maxLifetimeMs = 0;
+
+      for (let i = 0; i < CONFETTI_PIECES_PER_HIT; i++) {
+        const piece = document.createElement("span");
+        piece.className = "confetti-piece";
+
+        const width = 8 + Math.random() * 8;
+        const height = 12 + Math.random() * 12;
+        const durationMs = 2400 + Math.random() * 1300;
+        const delayMs = Math.random() * 180;
+        const driftX = -18 + Math.random() * 36;
+        const fallDistance = 85 + Math.random() * 30;
+        const rotateStart = -160 + Math.random() * 320;
+        const rotateEnd = rotateStart + (Math.random() < 0.5 ? -1 : 1) * (540 + Math.random() * 540);
+        const left = Math.random() * 100;
+        const color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+
+        piece.style.setProperty("--confetti-width", `${width.toFixed(1)}px`);
+        piece.style.setProperty("--confetti-height", `${height.toFixed(1)}px`);
+        piece.style.setProperty("--confetti-left", `${left.toFixed(2)}vw`);
+        piece.style.setProperty("--confetti-color", color);
+        piece.style.setProperty("--confetti-duration", `${durationMs.toFixed(0)}ms`);
+        piece.style.setProperty("--confetti-delay", `${delayMs.toFixed(0)}ms`);
+        piece.style.setProperty("--confetti-drift-x", `${driftX.toFixed(2)}vw`);
+        piece.style.setProperty("--confetti-fall-distance", `${fallDistance.toFixed(2)}vh`);
+        piece.style.setProperty("--confetti-rotate-start", `${rotateStart.toFixed(1)}deg`);
+        piece.style.setProperty("--confetti-rotate-end", `${rotateEnd.toFixed(1)}deg`);
+
+        burst.appendChild(piece);
+        maxLifetimeMs = Math.max(maxLifetimeMs, durationMs + delayMs);
+      }
+
+      celebrationLayer.appendChild(burst);
+      window.setTimeout(() => burst.remove(), maxLifetimeMs + 120);
+    }
+
     function startGame() {
       randomizeWind();
       game.hasStarted = true;
@@ -1575,6 +1689,7 @@ async function sendScoreToExternal(score) {
 
           game.hits++;
           game.score += scoreFromDistance(hit.dist);
+          triggerHitCelebration();
         }
       }
     }
